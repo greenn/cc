@@ -1,6 +1,7 @@
 import { store } from './store.js';
 
-const DEFAULT_BACKEND_URL = 'https://cdn.nadube.ru/dv/cc/backend';
+const DEFAULT_BACKEND_URL = 'https://backend.nadube.ru/cc';
+const LEGACY_BACKEND_URL = 'https://cdn.nadube.ru/dv/cc/backend';
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -16,6 +17,12 @@ function normalizeBaseUrl(value) {
   return String(value || '').trim().replace(/\/+$/, '');
 }
 
+function effectiveBackendUrl(settings) {
+  const configured = normalizeBaseUrl(settings?.backendUrl || '');
+  if (!configured || configured === LEGACY_BACKEND_URL) return DEFAULT_BACKEND_URL;
+  return configured;
+}
+
 function showBackendStatus(message, kind = 'info') {
   if (!backendStatus) return;
   backendStatus.hidden = false;
@@ -26,7 +33,13 @@ function showBackendStatus(message, kind = 'info') {
 
 function fillBackendSettings() {
   const settings = store.getSettings();
-  if (backendUrl) backendUrl.value = settings.backendUrl || DEFAULT_BACKEND_URL;
+  const resolvedUrl = effectiveBackendUrl(settings);
+
+  if (normalizeBaseUrl(settings.backendUrl || '') === LEGACY_BACKEND_URL) {
+    store.setSettings({ backendUrl: DEFAULT_BACKEND_URL });
+  }
+
+  if (backendUrl) backendUrl.value = resolvedUrl;
   if (backendToken) backendToken.value = settings.backendToken || '';
   if (backendProfile) backendProfile.value = settings.backendProfile || 'default';
   if (backendStatus) {
@@ -99,7 +112,6 @@ async function checkBackend() {
 }
 
 settingsButton?.addEventListener('click', () => {
-  // app.js opens the dialog; this module fills the server section.
   fillBackendSettings();
 });
 
