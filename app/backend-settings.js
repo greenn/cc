@@ -1,7 +1,10 @@
 import { store } from './store.js';
 
-const DEFAULT_BACKEND_URL = 'https://backend.nadube.ru/cc';
-const LEGACY_BACKEND_URL = 'https://cdn.nadube.ru/dv/cc/backend';
+const DEFAULT_BACKEND_URL = 'https://backend83.nadube.ru/cc';
+const LEGACY_BACKEND_URLS = new Set([
+  'https://cdn.nadube.ru/dv/cc/backend',
+  'https://backend.nadube.ru/cc',
+]);
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -19,7 +22,7 @@ function normalizeBaseUrl(value) {
 
 function effectiveBackendUrl(settings) {
   const configured = normalizeBaseUrl(settings?.backendUrl || '');
-  if (!configured || configured === LEGACY_BACKEND_URL) return DEFAULT_BACKEND_URL;
+  if (!configured || LEGACY_BACKEND_URLS.has(configured)) return DEFAULT_BACKEND_URL;
   return configured;
 }
 
@@ -34,8 +37,9 @@ function showBackendStatus(message, kind = 'info') {
 function fillBackendSettings() {
   const settings = store.getSettings();
   const resolvedUrl = effectiveBackendUrl(settings);
+  const configured = normalizeBaseUrl(settings.backendUrl || '');
 
-  if (normalizeBaseUrl(settings.backendUrl || '') === LEGACY_BACKEND_URL) {
+  if (LEGACY_BACKEND_URLS.has(configured)) {
     store.setSettings({ backendUrl: DEFAULT_BACKEND_URL });
   }
 
