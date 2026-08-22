@@ -4,18 +4,18 @@ This folder is a small storage backend for **CC — Comment Collection**. It is 
 
 ## Deployment target
 
-Recommended URL on the current hosting:
+Recommended URL:
 
 ```text
-https://cdn.nadube.ru/dv/cc/backend/
+https://backend.nadube.ru/cc/
 ```
 
-Copy the contents of `server/php/` to that directory.
+Copy the contents of `server/php/` to the `/cc/` directory of the `backend.nadube.ru` subdomain.
 
 Result:
 
 ```text
-/dv/cc/backend/
+/cc/
 ├── api/
 │   ├── health.php
 │   └── state.php
@@ -35,7 +35,7 @@ Result:
 Upload the files and open:
 
 ```text
-https://cdn.nadube.ru/dv/cc/backend/check.php
+https://backend.nadube.ru/cc/check.php
 ```
 
 The page checks:
@@ -84,7 +84,7 @@ For a personal installation use a long random value, preferably 32+ random bytes
 The default database location is:
 
 ```text
-server/php/data/cc.sqlite
+/cc/data/cc.sqlite
 ```
 
 The `data/` directory contains `.htaccess` that blocks direct HTTP access on Apache hosting.
@@ -102,7 +102,7 @@ Example:
 After creating `config.php`, open:
 
 ```text
-https://cdn.nadube.ru/dv/cc/backend/api/health.php
+https://backend.nadube.ru/cc/api/health.php
 ```
 
 Expected response:
@@ -124,7 +124,7 @@ The first successful request creates the SQLite database/table automatically.
 Endpoint:
 
 ```text
-https://cdn.nadube.ru/dv/cc/backend/api/state.php
+https://backend.nadube.ru/cc/api/state.php
 ```
 
 Authorization header:
@@ -138,7 +138,7 @@ The API stores one complete CC application state as JSON. This matches the curre
 ### Save state
 
 ```http
-PUT /dv/cc/backend/api/state.php
+PUT /cc/api/state.php
 Authorization: Bearer YOUR_TOKEN
 Content-Type: application/json
 
@@ -159,24 +159,8 @@ Response includes a monotonically increasing `revision`.
 ### Read state
 
 ```http
-GET /dv/cc/backend/api/state.php
+GET /cc/api/state.php
 Authorization: Bearer YOUR_TOKEN
-```
-
-Response:
-
-```json
-{
-  "ok": true,
-  "profile": "default",
-  "revision": 3,
-  "updatedAt": "2026-08-22T14:00:00+00:00",
-  "state": {
-    "version": 1,
-    "sources": [],
-    "comments": {}
-  }
-}
 ```
 
 If nothing has been saved yet, `revision` is `0` and `state` is `null`.
@@ -184,7 +168,7 @@ If nothing has been saved yet, `revision` is `0` and `state` is `null`.
 ### Delete server state
 
 ```http
-DELETE /dv/cc/backend/api/state.php
+DELETE /cc/api/state.php
 Authorization: Bearer YOUR_TOKEN
 ```
 
@@ -205,7 +189,7 @@ For the current CC installation use `default`.
 ## 6. Browser request example
 
 ```js
-const API = 'https://cdn.nadube.ru/dv/cc/backend/api/state.php';
+const API = 'https://backend.nadube.ru/cc/api/state.php';
 const TOKEN = 'token entered by the user, never committed to GitHub';
 
 async function saveState(state) {
@@ -236,10 +220,11 @@ async function loadState() {
 
 ## 7. CORS
 
-`config.example.php` currently permits requests from:
+`config.example.php` permits requests from:
 
 ```text
 https://greenn.github.io
+https://backend.nadube.ru
 https://cdn.nadube.ru
 http://localhost:8000
 http://127.0.0.1:8000
@@ -264,9 +249,7 @@ That includes:
 - reading position;
 - other local application state.
 
-This deliberately mirrors the current `localStorage` structure. It avoids a large migration now.
-
-Later, if needed, the same SQLite database can be normalized into separate tables such as `sources`, `comments`, and `source_state` without changing the public UI.
+This deliberately mirrors the current `localStorage` structure. Later the same SQLite database can be normalized into separate tables without changing the public UI.
 
 ## 9. Security notes
 
@@ -277,13 +260,19 @@ Later, if needed, the same SQLite database can be normalized into separate table
 - Keep `data/` inaccessible over HTTP.
 - Prefer a database path outside the public web root when the hosting permits it.
 
-## 10. Next CC step
+## 10. CC integration
 
-After this backend is uploaded and `check.php` reports `READY`, integrate the current `app/store.js` with it:
+The application settings use this default backend URL:
+
+```text
+https://backend.nadube.ru/cc
+```
+
+The **Check connection** button first calls `api/health.php`, then checks authenticated access to `api/state.php` when an API token is present.
+
+Current architecture target:
 
 ```text
 localStorage = fast local cache
 PHP + SQLite = persistent canonical copy
 ```
-
-The app can then load server state at startup and debounce-save changes back to the server.
