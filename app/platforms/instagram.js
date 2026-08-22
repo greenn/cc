@@ -1,10 +1,17 @@
-function parseInstagramId(url) {
-  const parsed = new URL(url);
-  const host = parsed.hostname.replace(/^www\./, '');
-  if (!host.endsWith('instagram.com')) return null;
-  const parts = parsed.pathname.split('/').filter(Boolean);
-  if (!['p', 'reel', 'reels'].includes(parts[0])) return null;
-  return parts[1] || null;
+function parseInstagramTarget(value) {
+  const url = new URL(value);
+  const host = url.hostname.replace(/^www\./, '').toLowerCase();
+  if (host !== 'instagram.com') return null;
+
+  const parts = url.pathname.split('/').filter(Boolean);
+  const markerIndex = parts.findIndex((part) => ['p', 'reel', 'reels'].includes(part.toLowerCase()));
+  if (markerIndex === -1 || !parts[markerIndex + 1]) return null;
+
+  const kind = parts[markerIndex].toLowerCase() === 'p' ? 'post' : 'reel';
+  const externalId = parts[markerIndex + 1];
+  const username = markerIndex > 0 ? parts[markerIndex - 1] : null;
+
+  return { externalId, kind, username };
 }
 
 export const instagramAdapter = {
@@ -13,26 +20,27 @@ export const instagramAdapter = {
 
   canHandle(url) {
     try {
-      return Boolean(parseInstagramId(url));
+      return Boolean(parseInstagramTarget(url));
     } catch {
       return false;
     }
   },
 
   async getPost(url) {
-    const externalId = parseInstagramId(url);
-    if (!externalId) throw new Error('Unsupported Instagram URL.');
+    const target = parseInstagramTarget(url);
+    if (!target) throw new Error('Unsupported Instagram URL.');
+
     const normalized = new URL(url);
     normalized.search = '';
     normalized.hash = '';
 
     return {
-      id: `instagram:${externalId}`,
+      id: `instagram:${target.externalId}`,
       platform: 'instagram',
-      externalId,
+      externalId: target.externalId,
       url: normalized.toString(),
-      title: `Instagram ${normalized.pathname.includes('/reel') ? 'reel' : 'post'}`,
-      author: 'Instagram',
+      title: `Instagram ${target.kind}`,
+      author: target.username ? `@${target.username}` : 'Instagram',
       thumbnail: '',
       publishedAt: null,
       commentCount: null,
