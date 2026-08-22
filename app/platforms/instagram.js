@@ -1,3 +1,5 @@
+import { helperRequest } from '../helper-client.js';
+
 function parseInstagramTarget(value) {
   const url = new URL(value);
   const host = url.hostname.replace(/^www\./, '').toLowerCase();
@@ -45,9 +47,9 @@ export const instagramAdapter = {
       publishedAt: null,
       commentCount: null,
       loadedCount: 0,
-      nextCursor: null,
-      hasMore: false,
-      integrationStatus: 'helper-required',
+      nextCursor: 'helper',
+      hasMore: true,
+      integrationStatus: 'helper',
       lastVisibleCommentId: null,
       lastOpenedAt: null,
       addedAt: new Date().toISOString(),
@@ -55,7 +57,23 @@ export const instagramAdapter = {
     };
   },
 
-  async getComments() {
-    throw new Error('Instagram comments need an authenticated API or browser helper. The adapter boundary is ready, but direct browser scraping is intentionally not used.');
+  async getComments(source) {
+    const result = await helperRequest('instagram.collect', {
+      url: source.url,
+      sourceId: source.id,
+      maxClicks: 40,
+    }, 120000);
+
+    const comments = Array.isArray(result?.comments) ? result.comments : [];
+    if (!comments.length) {
+      throw new Error('Instagram helper connected, but no comments were recognized. Open the post while logged in and try Refresh; Instagram markup may also have changed.');
+    }
+
+    return {
+      comments,
+      nextCursor: null,
+      hasMore: false,
+      totalResults: comments.length,
+    };
   },
 };
