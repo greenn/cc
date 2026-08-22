@@ -2,8 +2,6 @@
 
 CC is a local-first comment reader for links from external platforms.
 
-The repository contains two layers:
-
 ```text
 blank/ui/   original visual reference
 app/        working GitHub Pages application
@@ -11,79 +9,95 @@ app/        working GitHub Pages application
 
 ## Open online
 
-When GitHub Pages is enabled for the `main` branch root:
-
 ```text
 https://greenn.github.io/cc/
 ```
 
-The root redirects to:
-
-```text
-https://greenn.github.io/cc/app/
-```
-
-The original UI reference remains available at:
+The original UI reference:
 
 ```text
 https://greenn.github.io/cc/blank/ui/
 ```
 
-## What works in v0.1
+## Supported sources
 
-- add YouTube links;
-- parse standard YouTube, youtu.be and Shorts URLs;
-- fetch video metadata;
-- fetch comments by pages of 50;
+### YouTube
+
+Working integration through YouTube Data API v3.
+
+Supported URL families include standard videos, `youtu.be`, Shorts, embeds and live URLs when a video ID is present.
+
+Comments are loaded by API pages of 50.
+
+### Instagram
+
+Post/reel URLs are recognized, but comment loading still needs an authenticated official API or browser/local helper.
+
+### Holywarsoo forum
+
+Supported URL shape:
+
+```text
+https://holywarsoo.net/viewtopic.php?id=<topicId>&p=<page>
+```
+
+Forum loading follows a different rule from API sources:
+
+- one real forum page is one loading batch;
+- if the supplied URL starts at `p=31`, CC starts at page 31;
+- every post from that page is imported;
+- the next batch is `p=32`, then `p=33`, etc.;
+- forum post IDs/permalinks are used for deduplication when available.
+
+The browser first tries to read the public forum page directly. If cross-origin browser rules block that request, the adapter falls back to Jina Reader in HTML mode for the same public URL.
+
+Forum rules for future adapters are documented in:
+
+```text
+app/platforms/FORUMS.md
+```
+
+## Reader features
+
 - infinite loading;
-- mark comments read when they cross the middle of the reading viewport while scrolling down;
-- filters: Comments / Unread / Saved / Deleted;
+- automatic Read when a comment crosses the center reading line while scrolling down;
+- Comments / Unread / Saved / Deleted filters;
 - global All / Saved / Read / Deleted views;
 - search by text, author and username;
-- sort by source order, date, likes and replies;
-- save comments;
-- soft-delete and restore comments;
-- select a comment and inspect it in the right panel;
-- per-comment notes with automatic local persistence;
-- remember the last visible comment per source;
+- sorting;
+- Save;
+- soft Delete and Restore;
+- right-side comment details;
+- per-comment notes;
+- last reading position per source;
 - keyboard actions J / K / S / D / O;
-- preserve local user state when refreshing source data;
-- add Instagram post/reel links as prepared sources.
+- local user states preserved when source data is refreshed.
 
-## YouTube setup
+## YouTube API key
 
-CC uses YouTube Data API v3.
+CC uses YouTube Data API v3 for public video metadata and comments.
 
-1. Create a Google Cloud project.
-2. Enable **YouTube Data API v3**.
-3. Create an API key.
-4. Open CC.
-5. Open **Settings**.
-6. Paste the key into **YouTube Data API key**.
+1. Open Google Cloud Console.
+2. Create or select a project.
+3. Open **APIs & Services → Library**.
+4. Find and enable **YouTube Data API v3**.
+5. Open **APIs & Services → Credentials**.
+6. Choose **Create credentials → API key**.
+7. Restrict the key to **YouTube Data API v3**.
+8. Open CC → **Settings**.
+9. Paste the key into **YouTube Data API key** and save.
 
-The key is stored only in browser `localStorage`. Do not commit API keys to this repository.
+The key is stored only in browser `localStorage`; it is not committed to this repository.
 
-For a public deployment, restrict the key by HTTP referrer and by API in Google Cloud Console.
-
-## Instagram
-
-The application recognizes Instagram post/reel URLs and already has a separate platform adapter.
-
-Direct browser scraping is not used. Comment loading needs one of these future integrations:
-
-- authenticated official API;
-- browser extension/helper that can use an authenticated browser session;
-- local desktop helper.
-
-The rest of the UI does not need to change when that adapter is implemented.
+For the public GitHub Pages deployment, also restrict the key by HTTP referrer where practical.
 
 ## Storage
 
-The GitHub Pages version is a static browser application and stores state in `localStorage`.
+The GitHub Pages version stores state in browser `localStorage`.
 
-A future Electron build should replace this storage adapter with SQLite while keeping the same source/comment models.
+A future Electron build can replace this with SQLite while keeping the same source/comment models.
 
-## Files
+## Main files
 
 ```text
 app/
@@ -93,15 +107,15 @@ app/
 ├── store.js
 ├── ARCHITECTURE.md
 └── platforms/
+    ├── FORUMS.md
+    ├── holywarsoo.js
     ├── youtube.js
     └── instagram.js
 ```
 
 ## Development
 
-No build step is required for the current Pages version. Serve the repository through an HTTP server because ES modules should not be opened through `file://`.
-
-Example:
+No build step is required for the current Pages version. Serve it over HTTP because ES modules should not be opened through `file://`.
 
 ```bash
 python -m http.server 8000
@@ -112,15 +126,3 @@ Then open:
 ```text
 http://localhost:8000/app/
 ```
-
-## Next technical step
-
-For the desktop version:
-
-- Electron + React + TypeScript;
-- SQLite + Drizzle;
-- IPC storage repository;
-- virtualized list for very large local datasets;
-- authenticated Instagram helper/adapter.
-
-See `app/ARCHITECTURE.md` for the current boundaries.
