@@ -29,7 +29,7 @@ function requireToken(settings) {
 }
 
 function requireBackend(settings) {
-  const base = String(settings?.backendUrl || 'https://backend.nadube.ru/cc').trim().replace(/\/+$/, '');
+  const base = String(settings?.backendUrl || 'https://backend83.nadube.ru/cc').trim().replace(/\/+$/, '');
   const backendToken = String(settings?.backendToken || '').trim();
   if (!backendToken) throw new Error('VK requests use the CC PHP backend because api.vk.com is blocked by browser CORS. Configure the backend URL and API token in Settings first.');
   return { base, backendToken };
