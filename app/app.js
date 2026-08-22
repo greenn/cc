@@ -1,9 +1,10 @@
 import { store } from './store.js';
 import { youtubeAdapter } from './platforms/youtube.js';
 import { instagramAdapter } from './platforms/instagram.js';
+import { vkAdapter } from './platforms/vk.js';
 import { holywarsooAdapter } from './platforms/holywarsoo.js';
 
-const adapters = [youtubeAdapter, instagramAdapter, holywarsooAdapter];
+const adapters = [youtubeAdapter, instagramAdapter, vkAdapter, holywarsooAdapter];
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -31,6 +32,12 @@ const ui = {
   youtubeKey: $('#youtube-api-key'),
   note: $('#note-textarea'),
 };
+
+for (const source of store.getSources()) {
+  if (source.platform === 'instagram' && source.integrationStatus === 'helper-required') {
+    store.updateSource(source.id, { integrationStatus: 'helper', hasMore: true, nextCursor: 'helper' });
+  }
+}
 
 let currentSourceId = store.getSources()[0]?.id || null;
 let globalView = currentSourceId ? null : 'sources';
@@ -67,6 +74,7 @@ function shortNumber(value) {
 function sourceIcon(platform) {
   if (platform === 'youtube') return '▶';
   if (platform === 'instagram') return '◎';
+  if (platform === 'vk') return 'VK';
   if (platform === 'holywarsoo') return '▤';
   return '•';
 }
@@ -84,7 +92,9 @@ function adapterForUrl(url) {
 }
 
 function canAutoLoad(source) {
-  return Boolean(source && source.integrationStatus !== 'helper-required' && source.hasMore !== false);
+  if (!source || source.hasMore === false) return false;
+  if (source.platform === 'vk' && !store.getSettings().vkAccessToken) return false;
+  return true;
 }
 
 function getScopeComments() {
@@ -160,36 +170,30 @@ function renderSources() {
 function renderHeader() {
   const source = currentSourceId ? store.getSource(currentSourceId) : null;
   const isGlobal = !source;
-  ui.refresh.hidden = !source || source.integrationStatus === 'helper-required';
+  ui.refresh.hidden = !source;
 
   if (source) {
     const counts = countsForSource(source.id);
     ui.eyebrow.textContent = `${sourceLabel(source.platform)} · ${source.author || 'source'}`;
     ui.title.textContent = source.title;
-
     const parts = [`${counts.loaded} loaded`, `${counts.read} read`];
     if (source.commentCount != null) parts.push(`${source.commentCount} total`);
-    if (source.platform === 'holywarsoo' && source.totalPages) {
-      parts.push(`forum page ${source.currentPage || source.startPage || 1} / ${source.totalPages}`);
-    }
+    if (source.platform === 'holywarsoo' && source.totalPages) parts.push(`forum page ${source.currentPage || source.startPage || 1} / ${source.totalPages}`);
+    if (source.platform === 'instagram') parts.push('browser helper');
+    if (source.platform === 'vk' && !store.getSettings().vkAccessToken) parts.push('VK token required');
     ui.meta.textContent = parts.join(' · ');
   } else {
     const names = { sources: 'Sources', all: 'All comments', saved: 'Saved', read: 'Read', deleted: 'Deleted' };
     ui.eyebrow.textContent = 'Comment Collection';
     ui.title.textContent = names[globalView] || 'Comments';
-    ui.meta.textContent = globalView === 'sources'
-      ? 'Choose a source or add a new link.'
-      : `${getScopeComments().length} comments in this view`;
+    ui.meta.textContent = globalView === 'sources' ? 'Choose a source or add a new link.' : `${getScopeComments().length} comments in this view`;
   }
 
   $$('#top-tabs .top-tab').forEach((tab) => {
     tab.classList.toggle('is-active', !isGlobal && tab.dataset.filter === activeFilter);
     tab.disabled = isGlobal;
   });
-
-  $$('#main-nav .nav-item[data-view]').forEach((item) => {
-    item.classList.toggle('is-active', isGlobal && item.dataset.view === globalView);
-  });
+  $$('#main-nav .nav-item[data-view]').forEach((item) => item.classList.toggle('is-active', isGlobal && item.dataset.view === globalView));
 }
 
 function renderComments() {
@@ -213,18 +217,18 @@ function renderComments() {
     const label = globalView === 'saved' || activeFilter === 'saved' ? 'No saved comments' :
       globalView === 'deleted' || activeFilter === 'deleted' ? 'No deleted comments' :
       globalView === 'read' ? 'No read comments' : 'No comments found';
-    ui.emptyState.innerHTML = `<strong>${label}</strong><p>${source ? 'Try another filter or load comments.' : 'Add a source to begin.'}</p>`;
+    let hint = source ? 'Try another filter or refresh the source.' : 'Add a source to begin.';
+    if (source?.platform === 'vk' && !store.getSettings().vkAccessToken) hint = 'Add a VK user access token in Settings, then press Refresh.';
+    if (source?.platform === 'instagram') hint = 'Install the CC Browser Helper, stay logged in to Instagram, then press Refresh.';
+    ui.emptyState.innerHTML = `<strong>${label}</strong><p>${hint}</p>`;
     ui.commentsList.innerHTML = '';
     return;
   }
 
   ui.commentsList.innerHTML = comments.map((comment) => {
     const sourceForComment = store.getSource(comment.sourceId);
-    const status = [comment.read ? 'read' : 'unread', comment.saved ? 'saved' : '', comment.deleted ? 'deleted' : '']
-      .filter(Boolean)
-      .join(' · ');
+    const status = [comment.read ? 'read' : 'unread', comment.saved ? 'saved' : '', comment.deleted ? 'deleted' : ''].filter(Boolean).join(' · ');
     const pageBadge = comment.forumPage ? `<span>p.${comment.forumPage}</span>` : '';
-
     return `
       <article class="comment-card ${selectedCommentId === comment.id ? 'is-selected' : ''} ${comment.read ? 'is-read' : ''}" data-comment-id="${escapeHtml(comment.id)}" data-source-id="${escapeHtml(comment.sourceId)}">
         <div class="comment-avatar">${comment.authorAvatar ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" loading="lazy" />` : escapeHtml((comment.authorName || '?').slice(0, 2).toUpperCase())}</div>
@@ -250,7 +254,6 @@ function renderComments() {
       handleCommentAction(card.dataset.sourceId, card.dataset.commentId, button.dataset.action);
     }));
   });
-
   observeReadCards();
 }
 
@@ -271,15 +274,10 @@ function renderRightPanel() {
   const found = selectedCommentId ? store.findComment(selectedCommentId) : null;
   const comment = found?.comment;
   const source = found ? store.getSource(found.sourceId) : null;
-
-  $('#detail-avatar').innerHTML = comment?.authorAvatar
-    ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" />`
-    : escapeHtml((comment?.authorName || 'CC').slice(0, 2).toUpperCase());
+  $('#detail-avatar').innerHTML = comment?.authorAvatar ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" />` : escapeHtml((comment?.authorName || 'CC').slice(0, 2).toUpperCase());
   $('#detail-author').textContent = comment?.authorName || 'Selection';
   $('#detail-username').textContent = comment?.authorUsername || 'Comment details';
-  $('#detail-status').textContent = comment
-    ? [comment.read ? 'Read' : 'Unread', comment.saved ? 'Saved' : '', comment.deleted ? 'Deleted' : ''].filter(Boolean).join(' · ')
-    : '—';
+  $('#detail-status').textContent = comment ? [comment.read ? 'Read' : 'Unread', comment.saved ? 'Saved' : '', comment.deleted ? 'Deleted' : ''].filter(Boolean).join(' · ') : '—';
   $('#detail-source').textContent = source?.title || '—';
   $('#detail-author-name').textContent = comment?.authorName || '—';
   $('#detail-date').textContent = comment ? formatDate(comment.publishedAt) : '—';
@@ -307,7 +305,6 @@ function selectSource(sourceId) {
   activeFilter = 'comments';
   selectedCommentId = null;
   render();
-
   const source = store.getSource(sourceId);
   if (!store.getComments(sourceId).length && canAutoLoad(source)) loadMoreComments(sourceId);
   restorePosition(sourceId);
@@ -330,7 +327,6 @@ function setGlobalView(view) {
 function handleCommentAction(sourceId, commentId, action) {
   const comment = store.getComment(sourceId, commentId);
   if (!comment) return;
-
   if (action === 'save') store.updateComment(sourceId, commentId, { saved: !comment.saved, savedAt: !comment.saved ? new Date().toISOString() : null });
   if (action === 'delete') store.updateComment(sourceId, commentId, { deleted: true, deletedAt: new Date().toISOString() });
   if (action === 'restore') store.updateComment(sourceId, commentId, { deleted: false, deletedAt: null });
@@ -343,13 +339,12 @@ function showStatus(message, kind = 'info') {
   ui.statusBanner.dataset.kind = kind;
   ui.statusBanner.hidden = false;
   window.clearTimeout(showStatus.timer);
-  showStatus.timer = window.setTimeout(() => { ui.statusBanner.hidden = true; }, kind === 'error' ? 9000 : 4000);
+  showStatus.timer = window.setTimeout(() => { ui.statusBanner.hidden = true; }, kind === 'error' ? 12000 : 5000);
 }
 
 async function addSource(url) {
   const adapter = adapterForUrl(url);
-  if (!adapter) throw new Error('This URL is not a supported YouTube, Instagram, or forum link.');
-
+  if (!adapter) throw new Error('This URL is not a supported YouTube, Instagram, VK, or forum link.');
   const source = await adapter.getPost(url, store.getSettings());
   store.upsertSource(source);
   currentSourceId = source.id;
@@ -357,8 +352,8 @@ async function addSource(url) {
   activeFilter = 'comments';
   render();
 
-  if (source.integrationStatus === 'helper-required') {
-    showStatus('Instagram source added. Comment loading needs an authenticated helper/API.');
+  if (source.platform === 'vk' && !store.getSettings().vkAccessToken) {
+    showStatus('VK source added. Add a VK user access token in Settings, then press Refresh.');
     return;
   }
 
@@ -369,26 +364,25 @@ async function loadMoreComments(sourceId, { refresh = false } = {}) {
   const source = store.getSource(sourceId);
   if (!source || loadingSourceId || (!source.hasMore && !refresh)) return;
   const adapter = sourceAdapter(source);
-  if (!adapter || source.integrationStatus === 'helper-required') return;
+  if (!adapter) return;
 
   loadingSourceId = sourceId;
   ui.loadingMore.hidden = false;
-
   try {
     const cursor = refresh ? null : source.nextCursor;
     const page = await adapter.getComments(source, cursor, 50, store.getSettings());
-    store.upsertComments(source.id, page.comments);
-
+    store.upsertComments(source.id, page.comments || []);
     const patch = {
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
       loadedCount: store.getComments(source.id).length,
       lastUpdatedAt: new Date().toISOString(),
+      integrationStatus: 'ready',
     };
+    if (page.totalResults != null) patch.commentCount = page.totalResults;
     if (page.currentPage != null) patch.currentPage = page.currentPage;
     if (page.totalPages != null) patch.totalPages = page.totalPages;
     store.updateSource(source.id, patch);
-
     render();
     if (refresh) showStatus('Source refreshed. Local read/saved/deleted states were preserved.');
   } catch (error) {
@@ -401,11 +395,9 @@ async function loadMoreComments(sourceId, { refresh = false } = {}) {
 
 function observeReadCards() {
   if (!currentSourceId) return;
-
   readObserver = new IntersectionObserver((entries) => {
     if (!scrollingDown) return;
     let changed = false;
-
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
       const card = entry.target;
@@ -416,18 +408,12 @@ function observeReadCards() {
         changed = true;
       }
     }
-
     if (changed) {
       renderSources();
       renderHeader();
       renderRightPanel();
     }
-  }, {
-    root: ui.contentArea,
-    rootMargin: '-49% 0px -49% 0px',
-    threshold: 0,
-  });
-
+  }, { root: ui.contentArea, rootMargin: '-49% 0px -49% 0px', threshold: 0 });
   $$('.comment-card').forEach((card) => readObserver.observe(card));
 }
 
@@ -435,7 +421,7 @@ function restorePosition(sourceId) {
   const source = store.getSource(sourceId);
   if (!source?.lastVisibleCommentId) return;
   requestAnimationFrame(() => {
-    const card = [...document.querySelectorAll('.comment-card')].find((item) => item.dataset.commentId === source.lastVisibleCommentId);
+    const card = $$('.comment-card').find((item) => item.dataset.commentId === source.lastVisibleCommentId);
     if (card) card.scrollIntoView({ block: 'center' });
   });
 }
@@ -474,19 +460,17 @@ $$('#top-tabs .top-tab').forEach((button) => button.addEventListener('click', ()
 
 ['#add-link-button', '#left-add-link', '#empty-add-link'].forEach((selector) => $(selector)?.addEventListener('click', openAddDialog));
 $('#settings-button').addEventListener('click', openSettings);
-$('#help-button').addEventListener('click', () => showStatus('Add YouTube, Instagram, or a supported forum topic. Forum sources load one whole forum page at a time. Passing the center line marks comments read. J/K navigate, S saves, D deletes, O opens original.'));
+$('#help-button').addEventListener('click', () => showStatus('YouTube uses YouTube Data API. VK uses video.getComments with your user token. Instagram uses CC Browser Helper with your signed-in browser session. Forums use per-site adapters. Passing the center line marks comments read. J/K navigate, S saves, D deletes, O opens original.'));
 ui.refresh.addEventListener('click', () => currentSourceId && loadMoreComments(currentSourceId, { refresh: true }));
 ui.search.addEventListener('input', renderComments);
 ui.sort.addEventListener('change', renderComments);
 
 ui.addForm.addEventListener('submit', async (event) => {
-  const submitter = event.submitter;
-  if (submitter?.value === 'cancel') return;
+  if (event.submitter?.value === 'cancel') return;
   event.preventDefault();
   ui.addError.hidden = true;
   ui.addSubmit.disabled = true;
   ui.addSubmit.textContent = 'Adding…';
-
   try {
     await addSource(ui.sourceUrl.value.trim());
     ui.addDialog.close();
@@ -544,7 +528,6 @@ window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   if (key === 'j') moveSelection(1);
   if (key === 'k') moveSelection(-1);
-
   const found = selectedCommentId ? store.findComment(selectedCommentId) : null;
   if (!found) return;
   if (key === 's') { event.preventDefault(); handleCommentAction(found.sourceId, selectedCommentId, 'save'); }
