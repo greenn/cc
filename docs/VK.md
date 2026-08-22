@@ -37,15 +37,33 @@ VK authorization flows change over time. After the app is created, use the user 
 
 The access token itself is a secret and should be pasted directly into CC Settings.
 
-## API behavior
+## Why the CC backend is also required
 
-CC calls:
+A normal GitHub Pages browser page cannot reliably call `api.vk.com` directly because VK API responses are not intended as a general cross-origin browser endpoint. CC therefore sends the VK request through its own restricted PHP proxy:
 
 ```text
+https://backend.nadube.ru/cc/api/vk.php
+```
+
+The proxy only allows the read methods used by CC:
+
+```text
+video.get
 video.getComments
 ```
 
-with approximately:
+So VK setup requires both:
+
+```text
+CC backend URL + backend API token
+VK user access token
+```
+
+The VK token is sent over HTTPS to the user's own CC backend for the API request; it is not committed to GitHub.
+
+## API behavior
+
+CC calls `video.getComments` with approximately:
 
 ```text
 owner_id=<owner>
