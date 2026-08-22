@@ -46,6 +46,7 @@ try {
             cc_error('state must be a JSON object.', 422);
         }
 
+        $state = cc_sanitize_state($state);
         $payload = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         $now = gmdate('c');
 
