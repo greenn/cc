@@ -6,10 +6,11 @@
   <meta name="theme-color" content="#fff6cf" />
   <title>CC — Comment Collection</title>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./ui-state.css" />
 </head>
 <body>
   <main class="app-shell">
-    <aside class="left-panel" aria-label="Main navigation">
+    <aside class="left-panel" aria-label="Main navigation" title="Navigation, saved views, and source list.">
       <div class="brand">
         <span class="brand-mark">CC</span>
         <div class="brand-copy"><strong>Comment Collection</strong><span>Reader</span></div>
@@ -36,13 +37,13 @@
 
     <section class="workspace">
       <header class="topbar">
-        <nav class="top-tabs" id="top-tabs" aria-label="Comment filter">
+        <nav class="top-tabs" id="top-tabs" aria-label="Comment filter" title="Filters for the current source. Open a source to activate them.">
           <button class="top-tab is-active" data-filter="comments">Comments</button>
           <button class="top-tab" data-filter="unread">Unread</button>
           <button class="top-tab" data-filter="saved">Saved</button>
           <button class="top-tab" data-filter="deleted">Deleted</button>
         </nav>
-        <div class="top-tools">
+        <div class="top-tools" title="Search and sort comments in the current view.">
           <input id="search-input" class="search-input" type="search" placeholder="Search comments" aria-label="Search comments" />
           <select id="sort-select" class="sort-select" aria-label="Sort comments">
             <option value="source">Source order</option>
@@ -54,7 +55,7 @@
         </div>
       </header>
 
-      <section class="content-area" id="content-area">
+      <section class="content-area" id="content-area" title="Main source and comment list.">
         <div class="content-header">
           <div class="content-title-wrap">
             <p class="eyebrow" id="source-eyebrow">Comment Collection</p>
@@ -79,10 +80,10 @@
       </section>
     </section>
 
-    <aside class="right-panel" aria-label="Comment details">
+    <aside class="right-panel" aria-label="Comment details" title="Details and notes for the selected comment. Select a comment to activate this panel.">
       <header class="right-header">
         <div class="avatar" id="detail-avatar">CC</div>
-        <div class="profile-copy"><strong id="detail-author">Selection</strong><span id="detail-username">Comment details</span></div>
+        <div class="profile-copy" title="Selected comment and its author."><strong id="detail-author">Selection</strong><span id="detail-username">Comment details</span></div>
         <button class="more-button" id="open-original-button" type="button" title="Open original">↗</button>
       </header>
 
@@ -133,12 +134,12 @@
       <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
       <div>
         <p class="eyebrow" style="margin-bottom:2px">Server storage</p>
-        <strong style="font-size:13px">CDN / PHP backend</strong>
+        <strong style="font-size:13px">PHP backend</strong>
       </div>
 
       <label for="backend-url">Backend URL</label>
-      <input id="backend-url" type="url" autocomplete="off" value="https://cdn.nadube.ru/dv/cc/backend" placeholder="https://cdn.nadube.ru/dv/cc/backend" />
-      <p class="form-hint">Upload the contents of <code>server/php/</code> to this folder on the hosting.</p>
+      <input id="backend-url" type="url" autocomplete="off" value="https://backend.nadube.ru/cc" placeholder="https://backend.nadube.ru/cc" />
+      <p class="form-hint">Upload the contents of <code>server/php/</code> to <code>/cc/</code> on backend.nadube.ru.</p>
 
       <label for="backend-token">API token</label>
       <input id="backend-token" type="password" autocomplete="off" placeholder="Token from backend/config.php" />
