@@ -16,6 +16,15 @@ add_check($checks, 'SQLite3 extension', extension_loaded('sqlite3'), extension_l
 add_check($checks, 'JSON', extension_loaded('json'), extension_loaded('json') ? 'enabled' : 'missing');
 add_check($checks, 'mbstring', extension_loaded('mbstring'), extension_loaded('mbstring') ? 'enabled' : 'optional');
 
+$hasCurl = function_exists('curl_init');
+$hasUrlFopen = filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN);
+add_check(
+    $checks,
+    'Outbound HTTPS transport',
+    $hasCurl || $hasUrlFopen,
+    $hasCurl ? 'cURL enabled — VK proxy supported' : ($hasUrlFopen ? 'allow_url_fopen enabled — VK proxy supported' : 'need PHP cURL or allow_url_fopen for VK API proxy')
+);
+
 $dataDir = __DIR__ . '/data';
 if (!is_dir($dataDir)) {
     @mkdir($dataDir, 0770, true);
@@ -48,7 +57,7 @@ add_check($checks, 'SQLite read/write test', $sqliteTestOk, $sqliteDetails);
 $configExists = is_file(__DIR__ . '/config.php');
 add_check($checks, 'config.php', $configExists, $configExists ? 'found' : 'missing — copy config.example.php to config.php');
 
-$requiredNames = ['PHP version', 'PDO', 'PDO SQLite', 'JSON', 'Data directory', 'Data directory writable', 'SQLite read/write test'];
+$requiredNames = ['PHP version', 'PDO', 'PDO SQLite', 'JSON', 'Outbound HTTPS transport', 'Data directory', 'Data directory writable', 'SQLite read/write test'];
 $ready = true;
 foreach ($checks as $check) {
     if (in_array($check['name'], $requiredNames, true) && !$check['ok']) {
@@ -89,7 +98,7 @@ if (isset($_GET['json'])) {
     <?php endforeach; ?>
     </tbody>
   </table>
-  <p><strong>Required for CC:</strong> PHP 8.1+, PDO, PDO SQLite, JSON, and a writable directory for the SQLite file.</p>
+  <p><strong>Required for CC:</strong> PHP 8.1+, PDO, PDO SQLite, JSON, a writable SQLite directory, and cURL or allow_url_fopen for outbound VK API requests.</p>
   <p>After setup, copy <code>config.example.php</code> to <code>config.php</code>, set a long API token, then open <code>api/health.php</code>.</p>
   <p><small>You may delete or rename this checker after setup if you do not want hosting details publicly visible.</small></p>
 </main>
