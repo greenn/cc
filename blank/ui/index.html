@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CC — UI blank</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="left-panel" aria-label="Основная навигация">
+      <div class="brand" aria-label="CC">
+        <span class="brand-mark">CC</span>
+      </div>
+
+      <nav class="left-nav">
+        <a class="nav-item is-active" href="#">
+          <span class="nav-icon">▦</span>
+          <span>Sources</span>
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon">☰</span>
+          <span>All comments</span>
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon">★</span>
+          <span>Saved</span>
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon">✓</span>
+          <span>Read</span>
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon">×</span>
+          <span>Deleted</span>
+        </a>
+      </nav>
+
+      <div class="left-bottom">
+        <a class="nav-item" href="#">
+          <span class="nav-icon">?</span>
+          <span>Help</span>
+        </a>
+        <a class="nav-item" href="#">
+          <span class="nav-icon">⚙</span>
+          <span>Settings</span>
+        </a>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <nav class="top-tabs" aria-label="Верхнее меню">
+          <button class="top-tab is-active" type="button">Comments</button>
+          <button class="top-tab" type="button">Unread</button>
+          <button class="top-tab" type="button">Saved</button>
+          <button class="top-tab" type="button">Deleted</button>
+        </nav>
+      </header>
+
+      <section class="content-area">
+        <div class="content-header">
+          <div>
+            <p class="eyebrow">Current source</p>
+            <h1>Comments</h1>
+          </div>
+          <button class="primary-action" type="button">+ Add link</button>
+        </div>
+
+        <div class="content-placeholder">
+          <div class="placeholder-line is-wide"></div>
+          <div class="placeholder-line"></div>
+          <div class="placeholder-line is-short"></div>
+        </div>
+
+        <div class="content-placeholder">
+          <div class="placeholder-line is-wide"></div>
+          <div class="placeholder-line"></div>
+          <div class="placeholder-line is-short"></div>
+        </div>
+
+        <div class="content-placeholder">
+          <div class="placeholder-line is-wide"></div>
+          <div class="placeholder-line"></div>
+          <div class="placeholder-line is-short"></div>
+        </div>
+      </section>
+    </section>
+
+    <aside class="right-panel" aria-label="Контекстная панель">
+      <header class="right-header">
+        <div class="avatar">CC</div>
+        <div class="profile-copy">
+          <strong>Selection</strong>
+          <span>Comment details</span>
+        </div>
+        <button class="more-button" type="button" aria-label="Дополнительные действия">•••</button>
+      </header>
+
+      <section class="right-content">
+        <h2>Details</h2>
+        <div class="detail-tabs">
+          <button class="detail-tab is-active" type="button">Info</button>
+          <button class="detail-tab" type="button">Notes</button>
+        </div>
+
+        <dl class="details-list">
+          <div>
+            <dt>Status</dt>
+            <dd>Unread</dd>
+          </div>
+          <div>
+            <dt>Source</dt>
+            <dd>—</dd>
+          </div>
+          <div>
+            <dt>Author</dt>
+            <dd>—</dd>
+          </div>
+          <div>
+            <dt>Date</dt>
+            <dd>—</dd>
+          </div>
+        </dl>
+      </section>
+    </aside>
+  </main>
+</body>
+</html>
