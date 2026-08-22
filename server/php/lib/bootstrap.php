@@ -74,7 +74,10 @@ function cc_handle_options(): void
 
 function cc_bearer_token(): string
 {
-    $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $header = $_SERVER['HTTP_AUTHORIZATION']
+        ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION']
+        ?? '';
+
     if ($header === '' && function_exists('getallheaders')) {
         $headers = getallheaders();
         $header = $headers['Authorization'] ?? $headers['authorization'] ?? '';
@@ -191,6 +194,18 @@ function cc_read_json_body(): array
     }
 
     return $data;
+}
+
+function cc_sanitize_state(array $state): array
+{
+    if (isset($state['settings']) && is_array($state['settings'])) {
+        // API keys and backend credentials stay local to the browser/server config.
+        unset($state['settings']['youtubeApiKey']);
+        unset($state['settings']['serverApiToken']);
+        unset($state['settings']['apiToken']);
+    }
+
+    return $state;
 }
 
 header('X-Content-Type-Options: nosniff');
