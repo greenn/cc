@@ -14,6 +14,7 @@ return [
     // Exact browser origins allowed to call the API.
     'allowed_origins' => [
         'https://greenn.github.io',
+        'https://backend.nadube.ru',
         'https://cdn.nadube.ru',
         'http://localhost:8000',
         'http://127.0.0.1:8000',
