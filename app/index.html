@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#fff6cf" />
+  <title>CC — Comment Collection</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="left-panel" aria-label="Main navigation">
+      <div class="brand">
+        <span class="brand-mark">CC</span>
+        <div class="brand-copy"><strong>Comment Collection</strong><span>Reader</span></div>
+      </div>
+
+      <nav class="left-nav" id="main-nav">
+        <button class="nav-item is-active" data-view="sources"><span class="nav-icon">▦</span><span>Sources</span></button>
+        <button class="nav-item" data-view="all"><span class="nav-icon">☰</span><span>All comments</span></button>
+        <button class="nav-item" data-view="saved"><span class="nav-icon">★</span><span>Saved</span></button>
+        <button class="nav-item" data-view="read"><span class="nav-icon">✓</span><span>Read</span></button>
+        <button class="nav-item" data-view="deleted"><span class="nav-icon">×</span><span>Deleted</span></button>
+      </nav>
+
+      <section class="sources-section">
+        <div class="section-label"><span>Sources</span><button id="left-add-link" title="Add link">+</button></div>
+        <div id="sources-list" class="sources-list"></div>
+      </section>
+
+      <div class="left-bottom">
+        <button class="nav-item" id="help-button"><span class="nav-icon">?</span><span>Help</span></button>
+        <button class="nav-item" id="settings-button"><span class="nav-icon">⚙</span><span>Settings</span></button>
+      </div>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <nav class="top-tabs" id="top-tabs" aria-label="Comment filter">
+          <button class="top-tab is-active" data-filter="comments">Comments</button>
+          <button class="top-tab" data-filter="unread">Unread</button>
+          <button class="top-tab" data-filter="saved">Saved</button>
+          <button class="top-tab" data-filter="deleted">Deleted</button>
+        </nav>
+        <div class="top-tools">
+          <input id="search-input" class="search-input" type="search" placeholder="Search comments" aria-label="Search comments" />
+          <select id="sort-select" class="sort-select" aria-label="Sort comments">
+            <option value="source">Source order</option>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="likes">Most liked</option>
+            <option value="replies">Most replies</option>
+          </select>
+        </div>
+      </header>
+
+      <section class="content-area" id="content-area">
+        <div class="content-header">
+          <div class="content-title-wrap">
+            <p class="eyebrow" id="source-eyebrow">Comment Collection</p>
+            <h1 id="content-title">Sources</h1>
+            <p class="content-meta" id="content-meta">Add a YouTube or Instagram link to start.</p>
+          </div>
+          <div class="header-actions">
+            <button class="ghost-action" id="refresh-button" type="button" hidden>Refresh</button>
+            <button class="primary-action" id="add-link-button" type="button">+ Add link</button>
+          </div>
+        </div>
+
+        <div id="status-banner" class="status-banner" hidden></div>
+        <div id="empty-state" class="empty-state">
+          <strong>No sources yet</strong>
+          <p>Add a YouTube or Instagram link to start reading comments.</p>
+          <button class="primary-action" id="empty-add-link">+ Add link</button>
+        </div>
+        <div id="comments-list" class="comments-list"></div>
+        <div id="loading-more" class="loading-more" hidden>Loading more…</div>
+        <div id="load-sentinel" class="load-sentinel" aria-hidden="true"></div>
+      </section>
+    </section>
+
+    <aside class="right-panel" aria-label="Comment details">
+      <header class="right-header">
+        <div class="avatar" id="detail-avatar">CC</div>
+        <div class="profile-copy"><strong id="detail-author">Selection</strong><span id="detail-username">Comment details</span></div>
+        <button class="more-button" id="open-original-button" type="button" title="Open original">↗</button>
+      </header>
+
+      <section class="right-content">
+        <h2>Details</h2>
+        <div class="detail-tabs">
+          <button class="detail-tab is-active" data-detail-tab="info">Info</button>
+          <button class="detail-tab" data-detail-tab="notes">Notes</button>
+        </div>
+        <div id="detail-info" class="detail-panel">
+          <dl class="details-list">
+            <div><dt>Status</dt><dd id="detail-status">—</dd></div>
+            <div><dt>Source</dt><dd id="detail-source">—</dd></div>
+            <div><dt>Author</dt><dd id="detail-author-name">—</dd></div>
+            <div><dt>Date</dt><dd id="detail-date">—</dd></div>
+            <div><dt>Likes</dt><dd id="detail-likes">—</dd></div>
+            <div><dt>Replies</dt><dd id="detail-replies">—</dd></div>
+          </dl>
+        </div>
+        <div id="detail-notes" class="detail-panel" hidden>
+          <label class="notes-label" for="note-textarea">Your note</label>
+          <textarea id="note-textarea" class="note-textarea" placeholder="Write a note about this comment…"></textarea>
+          <small>Saved automatically.</small>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="add-link-dialog" class="dialog">
+    <form method="dialog" id="add-link-form" class="dialog-card">
+      <div class="dialog-head"><div><p class="eyebrow">New source</p><h2>Add link</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
+      <label for="source-url">YouTube or Instagram URL</label>
+      <input id="source-url" name="url" type="url" required placeholder="https://youtube.com/watch?v=…" autocomplete="off" />
+      <p class="form-hint">YouTube needs a Data API key in Settings. Instagram is prepared as an adapter but browser access to comments depends on an authenticated API/helper.</p>
+      <div id="add-link-error" class="form-error" hidden></div>
+      <div class="dialog-actions"><button value="cancel" class="ghost-action">Cancel</button><button id="add-source-submit" class="primary-action" value="default">Add source</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="settings-dialog" class="dialog">
+    <form method="dialog" id="settings-form" class="dialog-card">
+      <div class="dialog-head"><div><p class="eyebrow">Local settings</p><h2>Settings</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
+      <label for="youtube-api-key">YouTube Data API key</label>
+      <input id="youtube-api-key" type="password" autocomplete="off" placeholder="AIza…" />
+      <p class="form-hint">Stored only in this browser via localStorage. Do not commit API keys to GitHub.</p>
+      <div class="dialog-actions"><button value="cancel" class="ghost-action">Cancel</button><button class="primary-action" id="save-settings" value="default">Save</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
