@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "CC Browser Helper",
+  "version": "0.1.0",
+  "description": "Browser helper for CC — Comment Collection. Uses the signed-in browser session to collect comments from supported sites such as Instagram.",
+  "permissions": ["tabs"],
+  "host_permissions": [
+    "https://www.instagram.com/*",
+    "https://instagram.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://greenn.github.io/cc/*",
+        "https://*.nadube.ru/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["cc-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://instagram.com/*"
+      ],
+      "js": ["instagram-scraper.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "CC Browser Helper"
+  }
+}
