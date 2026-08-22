@@ -1,0 +1,24 @@
+/* Visual treatment for UI areas that are present but not active yet. */
+
+.top-tabs:has(.top-tab:disabled),
+.right-panel:has(#note-textarea:disabled) {
+  opacity: 0.38;
+  transition: opacity 160ms ease;
+}
+
+.top-tabs:has(.top-tab:disabled):hover,
+.right-panel:has(#note-textarea:disabled):hover {
+  opacity: 1;
+}
+
+.top-tabs:has(.top-tab:disabled),
+.right-panel:has(#note-textarea:disabled) {
+  cursor: help;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .top-tabs:has(.top-tab:disabled),
+  .right-panel:has(#note-textarea:disabled) {
+    transition: none;
+  }
+}
