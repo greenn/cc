@@ -1,0 +1,26 @@
+(() => {
+  window.postMessage({ source: 'cc-helper', type: 'CC_HELPER_READY', version: chrome.runtime.getManifest().version }, '*');
+
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return;
+    const message = event.data;
+    if (!message || message.source !== 'cc-app' || message.type !== 'CC_HELPER_REQUEST') return;
+
+    chrome.runtime.sendMessage({
+      type: 'CC_HELPER_REQUEST',
+      id: message.id,
+      action: message.action,
+      payload: message.payload || {},
+    }, (response) => {
+      const error = chrome.runtime.lastError;
+      window.postMessage({
+        source: 'cc-helper',
+        type: 'CC_HELPER_RESPONSE',
+        id: message.id,
+        ok: !error && Boolean(response?.ok),
+        result: response?.result,
+        error: error?.message || response?.error || null,
+      }, '*');
+    });
+  });
+})();
