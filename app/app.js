@@ -1,8 +1,9 @@
 import { store } from './store.js';
 import { youtubeAdapter } from './platforms/youtube.js';
 import { instagramAdapter } from './platforms/instagram.js';
+import { holywarsooAdapter } from './platforms/holywarsoo.js';
 
-const adapters = [youtubeAdapter, instagramAdapter];
+const adapters = [youtubeAdapter, instagramAdapter, holywarsooAdapter];
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -63,6 +64,17 @@ function shortNumber(value) {
   return new Intl.NumberFormat(undefined, { notation: number > 999 ? 'compact' : 'standard' }).format(number);
 }
 
+function sourceIcon(platform) {
+  if (platform === 'youtube') return '▶';
+  if (platform === 'instagram') return '◎';
+  if (platform === 'holywarsoo') return '▤';
+  return '•';
+}
+
+function sourceLabel(platform) {
+  return adapters.find((adapter) => adapter.id === platform)?.label || platform;
+}
+
 function sourceAdapter(source) {
   return adapters.find((adapter) => adapter.id === source?.platform) || null;
 }
@@ -71,10 +83,14 @@ function adapterForUrl(url) {
   return adapters.find((adapter) => adapter.canHandle(url)) || null;
 }
 
+function canAutoLoad(source) {
+  return Boolean(source && source.integrationStatus !== 'helper-required' && source.hasMore !== false);
+}
+
 function getScopeComments() {
   let comments = currentSourceId ? store.getComments(currentSourceId) : store.getComments();
-
   const filter = globalView && globalView !== 'sources' ? globalView : activeFilter;
+
   if (filter === 'comments' || filter === 'all') comments = comments.filter((comment) => !comment.deleted);
   if (filter === 'unread') comments = comments.filter((comment) => !comment.read && !comment.deleted);
   if (filter === 'read') comments = comments.filter((comment) => comment.read && !comment.deleted);
@@ -90,8 +106,8 @@ function getScopeComments() {
     );
   }
 
-  const sort = ui.sort.value;
   comments = [...comments];
+  const sort = ui.sort.value;
   if (sort === 'newest') comments.sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
   if (sort === 'oldest') comments.sort((a, b) => new Date(a.publishedAt || 0) - new Date(b.publishedAt || 0));
   if (sort === 'likes') comments.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
@@ -115,7 +131,7 @@ function renderSources() {
     return;
   }
 
-  const grouped = Map.groupBy ? Map.groupBy(sources, (source) => source.platform) : sources.reduce((map, source) => {
+  const grouped = sources.reduce((map, source) => {
     if (!map.has(source.platform)) map.set(source.platform, []);
     map.get(source.platform).push(source);
     return map;
@@ -123,14 +139,17 @@ function renderSources() {
 
   ui.sourcesList.innerHTML = [...grouped.entries()].map(([platform, items]) => `
     <div class="source-group">
-      <div class="source-group-title">${escapeHtml(platform)}</div>
+      <div class="source-group-title">${escapeHtml(sourceLabel(platform))}</div>
       ${items.map((source) => {
         const counts = countsForSource(source.id);
         const total = source.commentCount ?? counts.loaded;
+        const pageInfo = source.platform === 'holywarsoo' && source.totalPages
+          ? ` · p.${source.currentPage || source.startPage || 1}/${source.totalPages}`
+          : '';
         return `
           <button class="source-item ${currentSourceId === source.id ? 'is-active' : ''}" data-source-id="${escapeHtml(source.id)}">
-            <span class="source-platform">${source.platform === 'youtube' ? '▶' : '◎'}</span>
-            <span class="source-copy"><strong>${escapeHtml(source.title)}</strong><small>${counts.read} / ${total || counts.loaded} read</small></span>
+            <span class="source-platform">${sourceIcon(source.platform)}</span>
+            <span class="source-copy"><strong>${escapeHtml(source.title)}</strong><small>${counts.read} / ${total || counts.loaded} read${pageInfo}</small></span>
           </button>`;
       }).join('')}
     </div>`).join('');
@@ -141,13 +160,19 @@ function renderSources() {
 function renderHeader() {
   const source = currentSourceId ? store.getSource(currentSourceId) : null;
   const isGlobal = !source;
-  ui.refresh.hidden = !source;
+  ui.refresh.hidden = !source || source.integrationStatus === 'helper-required';
 
   if (source) {
     const counts = countsForSource(source.id);
-    ui.eyebrow.textContent = `${source.platform} · ${source.author || 'source'}`;
+    ui.eyebrow.textContent = `${sourceLabel(source.platform)} · ${source.author || 'source'}`;
     ui.title.textContent = source.title;
-    ui.meta.textContent = `${counts.loaded} loaded · ${counts.read} read${source.commentCount != null ? ` · ${source.commentCount} total` : ''}`;
+
+    const parts = [`${counts.loaded} loaded`, `${counts.read} read`];
+    if (source.commentCount != null) parts.push(`${source.commentCount} total`);
+    if (source.platform === 'holywarsoo' && source.totalPages) {
+      parts.push(`forum page ${source.currentPage || source.startPage || 1} / ${source.totalPages}`);
+    }
+    ui.meta.textContent = parts.join(' · ');
   } else {
     const names = { sources: 'Sources', all: 'All comments', saved: 'Saved', read: 'Read', deleted: 'Deleted' };
     ui.eyebrow.textContent = 'Comment Collection';
@@ -177,11 +202,13 @@ function renderComments() {
     ui.commentsList.innerHTML = renderSourceOverview();
     ui.emptyState.hidden = store.getSources().length > 0;
     ui.sentinel.hidden = true;
+    bindOverviewButtons();
     return;
   }
 
-  ui.sentinel.hidden = !source || !source.hasMore;
+  ui.sentinel.hidden = !source || !canAutoLoad(source);
   ui.emptyState.hidden = comments.length > 0;
+
   if (!comments.length) {
     const label = globalView === 'saved' || activeFilter === 'saved' ? 'No saved comments' :
       globalView === 'deleted' || activeFilter === 'deleted' ? 'No deleted comments' :
@@ -193,7 +220,11 @@ function renderComments() {
 
   ui.commentsList.innerHTML = comments.map((comment) => {
     const sourceForComment = store.getSource(comment.sourceId);
-    const status = [comment.read ? 'read' : 'unread', comment.saved ? 'saved' : '', comment.deleted ? 'deleted' : ''].filter(Boolean).join(' · ');
+    const status = [comment.read ? 'read' : 'unread', comment.saved ? 'saved' : '', comment.deleted ? 'deleted' : '']
+      .filter(Boolean)
+      .join(' · ');
+    const pageBadge = comment.forumPage ? `<span>p.${comment.forumPage}</span>` : '';
+
     return `
       <article class="comment-card ${selectedCommentId === comment.id ? 'is-selected' : ''} ${comment.read ? 'is-read' : ''}" data-comment-id="${escapeHtml(comment.id)}" data-source-id="${escapeHtml(comment.sourceId)}">
         <div class="comment-avatar">${comment.authorAvatar ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" loading="lazy" />` : escapeHtml((comment.authorName || '?').slice(0, 2).toUpperCase())}</div>
@@ -201,7 +232,7 @@ function renderComments() {
           <div class="comment-head"><div><strong>${escapeHtml(comment.authorName)}</strong><span>${escapeHtml(comment.authorUsername || sourceForComment?.platform || '')}</span></div><time>${formatDate(comment.publishedAt)}</time></div>
           <p class="comment-text">${escapeHtml(comment.text).replaceAll('\n', '<br>')}</p>
           <div class="comment-footer">
-            <div class="comment-stats"><span>♥ ${shortNumber(comment.likeCount)}</span><span>↩ ${shortNumber(comment.replyCount)}</span><span class="comment-status">${escapeHtml(status)}</span></div>
+            <div class="comment-stats"><span>♥ ${shortNumber(comment.likeCount)}</span><span>↩ ${shortNumber(comment.replyCount)}</span>${pageBadge}<span class="comment-status">${escapeHtml(status)}</span></div>
             <div class="comment-actions">
               <button data-action="save" title="Save">${comment.saved ? '★ Saved' : '☆ Save'}</button>
               ${comment.deleted ? '<button data-action="restore">↶ Restore</button>' : '<button data-action="delete">× Delete</button>'}
@@ -228,9 +259,9 @@ function renderSourceOverview() {
   if (!sources.length) return '';
   return `<div class="source-overview">${sources.map((source) => {
     const counts = countsForSource(source.id);
-    return `<article class="source-overview-card" data-overview-source="${escapeHtml(source.id)}">
-      <div class="overview-icon">${source.platform === 'youtube' ? '▶' : '◎'}</div>
-      <div><p class="eyebrow">${escapeHtml(source.platform)}</p><h3>${escapeHtml(source.title)}</h3><p>${counts.loaded} loaded · ${counts.read} read · ${counts.saved} saved</p></div>
+    return `<article class="source-overview-card">
+      <div class="overview-icon">${sourceIcon(source.platform)}</div>
+      <div><p class="eyebrow">${escapeHtml(sourceLabel(source.platform))}</p><h3>${escapeHtml(source.title)}</h3><p>${counts.loaded} loaded · ${counts.read} read · ${counts.saved} saved</p></div>
       <button class="ghost-action" data-open-source="${escapeHtml(source.id)}">Open</button>
     </article>`;
   }).join('')}</div>`;
@@ -241,10 +272,14 @@ function renderRightPanel() {
   const comment = found?.comment;
   const source = found ? store.getSource(found.sourceId) : null;
 
-  $('#detail-avatar').innerHTML = comment?.authorAvatar ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" />` : escapeHtml((comment?.authorName || 'CC').slice(0, 2).toUpperCase());
+  $('#detail-avatar').innerHTML = comment?.authorAvatar
+    ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" />`
+    : escapeHtml((comment?.authorName || 'CC').slice(0, 2).toUpperCase());
   $('#detail-author').textContent = comment?.authorName || 'Selection';
   $('#detail-username').textContent = comment?.authorUsername || 'Comment details';
-  $('#detail-status').textContent = comment ? [comment.read ? 'Read' : 'Unread', comment.saved ? 'Saved' : '', comment.deleted ? 'Deleted' : ''].filter(Boolean).join(' · ') : '—';
+  $('#detail-status').textContent = comment
+    ? [comment.read ? 'Read' : 'Unread', comment.saved ? 'Saved' : '', comment.deleted ? 'Deleted' : ''].filter(Boolean).join(' · ')
+    : '—';
   $('#detail-source').textContent = source?.title || '—';
   $('#detail-author-name').textContent = comment?.authorName || '—';
   $('#detail-date').textContent = comment ? formatDate(comment.publishedAt) : '—';
@@ -260,7 +295,6 @@ function render() {
   renderHeader();
   renderComments();
   renderRightPanel();
-  bindOverviewButtons();
 }
 
 function bindOverviewButtons() {
@@ -273,8 +307,9 @@ function selectSource(sourceId) {
   activeFilter = 'comments';
   selectedCommentId = null;
   render();
+
   const source = store.getSource(sourceId);
-  if (!store.getComments(sourceId).length && source?.platform === 'youtube') loadMoreComments(sourceId);
+  if (!store.getComments(sourceId).length && canAutoLoad(source)) loadMoreComments(sourceId);
   restorePosition(sourceId);
 }
 
@@ -295,6 +330,7 @@ function setGlobalView(view) {
 function handleCommentAction(sourceId, commentId, action) {
   const comment = store.getComment(sourceId, commentId);
   if (!comment) return;
+
   if (action === 'save') store.updateComment(sourceId, commentId, { saved: !comment.saved, savedAt: !comment.saved ? new Date().toISOString() : null });
   if (action === 'delete') store.updateComment(sourceId, commentId, { deleted: true, deletedAt: new Date().toISOString() });
   if (action === 'restore') store.updateComment(sourceId, commentId, { deleted: false, deletedAt: null });
@@ -307,40 +343,52 @@ function showStatus(message, kind = 'info') {
   ui.statusBanner.dataset.kind = kind;
   ui.statusBanner.hidden = false;
   window.clearTimeout(showStatus.timer);
-  showStatus.timer = window.setTimeout(() => { ui.statusBanner.hidden = true; }, kind === 'error' ? 8000 : 3500);
+  showStatus.timer = window.setTimeout(() => { ui.statusBanner.hidden = true; }, kind === 'error' ? 9000 : 4000);
 }
 
 async function addSource(url) {
   const adapter = adapterForUrl(url);
-  if (!adapter) throw new Error('This URL is not a supported YouTube or Instagram link.');
+  if (!adapter) throw new Error('This URL is not a supported YouTube, Instagram, or forum link.');
+
   const source = await adapter.getPost(url, store.getSettings());
   store.upsertSource(source);
   currentSourceId = source.id;
   globalView = null;
   activeFilter = 'comments';
   render();
-  if (source.platform === 'youtube') await loadMoreComments(source.id);
-  else showStatus('Instagram source added. Comment loading needs an authenticated helper/API.', 'info');
+
+  if (source.integrationStatus === 'helper-required') {
+    showStatus('Instagram source added. Comment loading needs an authenticated helper/API.');
+    return;
+  }
+
+  await loadMoreComments(source.id);
 }
 
 async function loadMoreComments(sourceId, { refresh = false } = {}) {
   const source = store.getSource(sourceId);
   if (!source || loadingSourceId || (!source.hasMore && !refresh)) return;
   const adapter = sourceAdapter(source);
-  if (!adapter) return;
+  if (!adapter || source.integrationStatus === 'helper-required') return;
 
   loadingSourceId = sourceId;
   ui.loadingMore.hidden = false;
+
   try {
     const cursor = refresh ? null : source.nextCursor;
     const page = await adapter.getComments(source, cursor, 50, store.getSettings());
     store.upsertComments(source.id, page.comments);
-    store.updateSource(source.id, {
+
+    const patch = {
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
       loadedCount: store.getComments(source.id).length,
       lastUpdatedAt: new Date().toISOString(),
-    });
+    };
+    if (page.currentPage != null) patch.currentPage = page.currentPage;
+    if (page.totalPages != null) patch.totalPages = page.totalPages;
+    store.updateSource(source.id, patch);
+
     render();
     if (refresh) showStatus('Source refreshed. Local read/saved/deleted states were preserved.');
   } catch (error) {
@@ -353,9 +401,11 @@ async function loadMoreComments(sourceId, { refresh = false } = {}) {
 
 function observeReadCards() {
   if (!currentSourceId) return;
+
   readObserver = new IntersectionObserver((entries) => {
     if (!scrollingDown) return;
     let changed = false;
+
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
       const card = entry.target;
@@ -366,6 +416,7 @@ function observeReadCards() {
         changed = true;
       }
     }
+
     if (changed) {
       renderSources();
       renderHeader();
@@ -423,7 +474,7 @@ $$('#top-tabs .top-tab').forEach((button) => button.addEventListener('click', ()
 
 ['#add-link-button', '#left-add-link', '#empty-add-link'].forEach((selector) => $(selector)?.addEventListener('click', openAddDialog));
 $('#settings-button').addEventListener('click', openSettings);
-$('#help-button').addEventListener('click', () => showStatus('Add a source, then scroll comments. Passing the center line marks them read. J/K navigate, S saves, D deletes, O opens original.'));
+$('#help-button').addEventListener('click', () => showStatus('Add YouTube, Instagram, or a supported forum topic. Forum sources load one whole forum page at a time. Passing the center line marks comments read. J/K navigate, S saves, D deletes, O opens original.'));
 ui.refresh.addEventListener('click', () => currentSourceId && loadMoreComments(currentSourceId, { refresh: true }));
 ui.search.addEventListener('input', renderComments);
 ui.sort.addEventListener('change', renderComments);
@@ -435,6 +486,7 @@ ui.addForm.addEventListener('submit', async (event) => {
   ui.addError.hidden = true;
   ui.addSubmit.disabled = true;
   ui.addSubmit.textContent = 'Adding…';
+
   try {
     await addSource(ui.sourceUrl.value.trim());
     ui.addDialog.close();
@@ -492,11 +544,15 @@ window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
   if (key === 'j') moveSelection(1);
   if (key === 'k') moveSelection(-1);
+
   const found = selectedCommentId ? store.findComment(selectedCommentId) : null;
   if (!found) return;
   if (key === 's') { event.preventDefault(); handleCommentAction(found.sourceId, selectedCommentId, 'save'); }
   if (key === 'd') { event.preventDefault(); handleCommentAction(found.sourceId, selectedCommentId, 'delete'); }
-  if (key === 'o' && found.comment.originalUrl) { event.preventDefault(); window.open(found.comment.originalUrl, '_blank', 'noopener,noreferrer'); }
+  if (key === 'o' && found.comment.originalUrl) {
+    event.preventDefault();
+    window.open(found.comment.originalUrl, '_blank', 'noopener,noreferrer');
+  }
 });
 
 render();
