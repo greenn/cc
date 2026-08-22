@@ -28,22 +28,33 @@ function requireToken(settings) {
   return token;
 }
 
-async function vkApi(method, params, token) {
-  const body = new URLSearchParams({
-    ...Object.fromEntries(Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')),
-    access_token: token,
-    v: VK_API_VERSION,
-  });
+function requireBackend(settings) {
+  const base = String(settings?.backendUrl || 'https://backend.nadube.ru/cc').trim().replace(/\/+$/, '');
+  const backendToken = String(settings?.backendToken || '').trim();
+  if (!backendToken) throw new Error('VK requests use the CC PHP backend because api.vk.com is blocked by browser CORS. Configure the backend URL and API token in Settings first.');
+  return { base, backendToken };
+}
 
-  const response = await fetch(`https://api.vk.com/method/${method}`, {
+async function vkApi(method, params, settings) {
+  const accessToken = requireToken(settings);
+  const { base, backendToken } = requireBackend(settings);
+  const response = await fetch(`${base}/api/vk.php`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-    body,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${backendToken}`,
+    },
+    body: JSON.stringify({
+      method,
+      params,
+      accessToken,
+      v: VK_API_VERSION,
+    }),
   });
 
-  if (!response.ok) throw new Error(`VK API request failed (${response.status}).`);
-  const data = await response.json();
-  if (data.error) throw new Error(`VK API: ${data.error.error_msg || `error ${data.error.error_code}`}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.error || `VK proxy request failed (${response.status}).`);
   return data.response;
 }
 
@@ -65,9 +76,7 @@ function authorMaps(response) {
 
 function mapComment(comment, source, maps) {
   const fromId = Number(comment.from_id || 0);
-  const author = fromId < 0
-    ? maps.groups.get(Math.abs(fromId))
-    : maps.profiles.get(fromId);
+  const author = fromId < 0 ? maps.groups.get(Math.abs(fromId)) : maps.profiles.get(fromId);
   const commentId = String(comment.id);
 
   return {
@@ -104,10 +113,10 @@ export const vkAdapter = {
     let commentCount = null;
     const token = String(settings.vkAccessToken || '').trim();
 
-    if (token) {
+    if (token && settings.backendToken) {
       try {
         const videos = `${target.ownerId}_${target.videoId}${target.accessKey ? `_${target.accessKey}` : ''}`;
-        const info = await vkApi('video.get', { videos, extended: 1 }, token);
+        const info = await vkApi('video.get', { videos, extended: 1 }, settings);
         const video = info?.items?.[0];
         if (video) {
           title = video.title || title;
@@ -117,7 +126,7 @@ export const vkAdapter = {
           thumbnail = image?.url || '';
         }
       } catch {
-        // Adding the source should still work; getComments will surface token/access errors.
+        // Source creation should still succeed; Refresh will show configuration/access errors.
       }
     }
 
@@ -146,7 +155,8 @@ export const vkAdapter = {
   },
 
   async getComments(source, cursor, _limit, settings = {}) {
-    const token = requireToken(settings);
+    requireToken(settings);
+    requireBackend(settings);
     const offset = Math.max(0, Number.parseInt(cursor || '0', 10) || 0);
     const response = await vkApi('video.getComments', {
       owner_id: source.ownerId,
@@ -157,7 +167,7 @@ export const vkAdapter = {
       extended: 1,
       need_likes: 1,
       thread_items_count: 10,
-    }, token);
+    }, settings);
 
     const maps = authorMaps(response || {});
     const items = Array.isArray(response?.items) ? response.items : [];
