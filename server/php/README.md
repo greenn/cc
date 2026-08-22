@@ -7,10 +7,10 @@ This folder is a small storage backend for **CC — Comment Collection**. It is 
 Recommended URL:
 
 ```text
-https://backend.nadube.ru/cc/
+https://backend83.nadube.ru/cc/
 ```
 
-Copy the contents of `server/php/` to the `/cc/` directory of the `backend.nadube.ru` subdomain.
+Copy the contents of `server/php/` to the `/cc/` directory of the `backend83.nadube.ru` subdomain.
 
 Result:
 
@@ -35,7 +35,7 @@ Result:
 Upload the files and open:
 
 ```text
-https://backend.nadube.ru/cc/check.php
+https://backend83.nadube.ru/cc/check.php
 ```
 
 The page checks:
@@ -102,7 +102,7 @@ Example:
 After creating `config.php`, open:
 
 ```text
-https://backend.nadube.ru/cc/api/health.php
+https://backend83.nadube.ru/cc/api/health.php
 ```
 
 Expected response:
@@ -124,7 +124,7 @@ The first successful request creates the SQLite database/table automatically.
 Endpoint:
 
 ```text
-https://backend.nadube.ru/cc/api/state.php
+https://backend83.nadube.ru/cc/api/state.php
 ```
 
 Authorization header:
@@ -189,7 +189,7 @@ For the current CC installation use `default`.
 ## 6. Browser request example
 
 ```js
-const API = 'https://backend.nadube.ru/cc/api/state.php';
+const API = 'https://backend83.nadube.ru/cc/api/state.php';
 const TOKEN = 'token entered by the user, never committed to GitHub';
 
 async function saveState(state) {
@@ -224,7 +224,7 @@ async function loadState() {
 
 ```text
 https://greenn.github.io
-https://backend.nadube.ru
+https://backend83.nadube.ru
 https://cdn.nadube.ru
 http://localhost:8000
 http://127.0.0.1:8000
@@ -265,7 +265,7 @@ This deliberately mirrors the current `localStorage` structure. Later the same S
 The application settings use this default backend URL:
 
 ```text
-https://backend.nadube.ru/cc
+https://backend83.nadube.ru/cc
 ```
 
 The **Check connection** button first calls `api/health.php`, then checks authenticated access to `api/state.php` when an API token is present.
