@@ -60,7 +60,7 @@
           <div class="content-title-wrap">
             <p class="eyebrow" id="source-eyebrow">Comment Collection</p>
             <h1 id="content-title">Sources</h1>
-            <p class="content-meta" id="content-meta">Add a YouTube, Instagram, or supported forum link to start.</p>
+            <p class="content-meta" id="content-meta">Add a YouTube, Instagram, VK, or supported forum link to start.</p>
           </div>
           <div class="header-actions">
             <button class="ghost-action" id="refresh-button" type="button" hidden>Refresh</button>
@@ -71,7 +71,7 @@
         <div id="status-banner" class="status-banner" hidden></div>
         <div id="empty-state" class="empty-state">
           <strong>No sources yet</strong>
-          <p>Add a YouTube, Instagram, or supported forum link to start reading comments.</p>
+          <p>Add a YouTube, Instagram, VK, or supported forum link to start reading comments.</p>
           <button class="primary-action" id="empty-add-link">+ Add link</button>
         </div>
         <div id="comments-list" class="comments-list"></div>
@@ -115,9 +115,9 @@
   <dialog id="add-link-dialog" class="dialog">
     <form method="dialog" id="add-link-form" class="dialog-card">
       <div class="dialog-head"><div><p class="eyebrow">New source</p><h2>Add link</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
-      <label for="source-url">YouTube, Instagram, or forum URL</label>
-      <input id="source-url" name="url" type="url" required placeholder="https://holywarsoo.net/viewtopic.php?id=…&p=…" autocomplete="off" />
-      <p class="form-hint">YouTube needs a Data API key in Settings. Holywarsoo topics are loaded page-by-page: one whole forum page is one batch. Instagram comment loading still needs an authenticated API/helper.</p>
+      <label for="source-url">YouTube, Instagram, VK, or forum URL</label>
+      <input id="source-url" name="url" type="url" required placeholder="https://vk.ru/video… or https://holywarsoo.net/viewtopic.php?id=…&p=…" autocomplete="off" />
+      <p class="form-hint">YouTube needs a Data API key. VK video comments need a VK user access token. Instagram uses the CC Browser Helper and your signed-in Chrome session. Holywarsoo topics load one whole forum page per batch.</p>
       <div id="add-link-error" class="form-error" hidden></div>
       <div class="dialog-actions"><button value="cancel" class="ghost-action">Cancel</button><button id="add-source-submit" class="primary-action" value="default">Add source</button></div>
     </form>
@@ -127,9 +127,22 @@
     <form method="dialog" id="settings-form" class="dialog-card">
       <div class="dialog-head"><div><p class="eyebrow">Application settings</p><h2>Settings</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
 
+      <div><p class="eyebrow" style="margin-bottom:2px">YouTube</p><strong style="font-size:13px">YouTube Data API</strong></div>
       <label for="youtube-api-key">YouTube Data API key</label>
       <input id="youtube-api-key" type="password" autocomplete="off" placeholder="AIza…" />
       <p class="form-hint">Stored only in this browser via localStorage. Enable YouTube Data API v3 in Google Cloud, then create an API key.</p>
+
+      <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
+      <div><p class="eyebrow" style="margin-bottom:2px">VK</p><strong style="font-size:13px">VK video comments</strong></div>
+      <label for="vk-access-token">VK user access token</label>
+      <input id="vk-access-token" type="password" autocomplete="off" placeholder="vk1.a.…" />
+      <p class="form-hint">A user token is required by VK API method <code>video.getComments</code>. Keep it private: enter it here, not in GitHub or source code.</p>
+
+      <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
+      <div><p class="eyebrow" style="margin-bottom:2px">Instagram</p><strong style="font-size:13px">CC Browser Helper</strong></div>
+      <p class="form-hint">Install <code>helper/chrome/</code> as an unpacked Chrome extension. It opens Instagram in your existing signed-in browser session and returns comments that the page can display.</p>
+      <div id="helper-status" class="form-error" hidden></div>
+      <div style="display:flex;justify-content:flex-start"><button id="helper-check" class="ghost-action" type="button">Check helper</button></div>
 
       <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
       <div>
@@ -160,6 +173,8 @@
   </dialog>
 
   <script type="module" src="./app.js"></script>
+  <script type="module" src="./vk-settings.js"></script>
+  <script type="module" src="./helper-settings.js"></script>
   <script type="module" src="./backend-settings.js"></script>
 </body>
 </html>
