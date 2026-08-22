@@ -124,14 +124,41 @@
 
   <dialog id="settings-dialog" class="dialog">
     <form method="dialog" id="settings-form" class="dialog-card">
-      <div class="dialog-head"><div><p class="eyebrow">Local settings</p><h2>Settings</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
+      <div class="dialog-head"><div><p class="eyebrow">Application settings</p><h2>Settings</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
+
       <label for="youtube-api-key">YouTube Data API key</label>
       <input id="youtube-api-key" type="password" autocomplete="off" placeholder="AIza…" />
-      <p class="form-hint">Stored only in this browser via localStorage. Do not commit API keys to GitHub. Enable YouTube Data API v3 in Google Cloud, then create an API key.</p>
+      <p class="form-hint">Stored only in this browser via localStorage. Enable YouTube Data API v3 in Google Cloud, then create an API key.</p>
+
+      <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
+      <div>
+        <p class="eyebrow" style="margin-bottom:2px">Server storage</p>
+        <strong style="font-size:13px">CDN / PHP backend</strong>
+      </div>
+
+      <label for="backend-url">Backend URL</label>
+      <input id="backend-url" type="url" autocomplete="off" value="https://cdn.nadube.ru/dv/cc/backend" placeholder="https://cdn.nadube.ru/dv/cc/backend" />
+      <p class="form-hint">Upload the contents of <code>server/php/</code> to this folder on the hosting.</p>
+
+      <label for="backend-token">API token</label>
+      <input id="backend-token" type="password" autocomplete="off" placeholder="Token from backend/config.php" />
+      <p class="form-hint">The token is stored locally in this browser and is sent only to your backend over HTTPS.</p>
+
+      <label for="backend-profile">Storage profile</label>
+      <input id="backend-profile" type="text" autocomplete="off" value="default" placeholder="default" />
+
+      <div id="backend-status" class="form-error" hidden></div>
+      <div style="display:flex;justify-content:flex-start">
+        <button id="backend-check" class="ghost-action" type="button">Check connection</button>
+      </div>
+
+      <p class="form-hint">The connection check verifies PHP + SQLite first, then verifies access to the storage API when a token is present. Server synchronization itself will be enabled separately.</p>
+
       <div class="dialog-actions"><button value="cancel" class="ghost-action">Cancel</button><button class="primary-action" id="save-settings" value="default">Save</button></div>
     </form>
   </dialog>
 
   <script type="module" src="./app.js"></script>
+  <script type="module" src="./backend-settings.js"></script>
 </body>
 </html>
