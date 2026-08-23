@@ -16,6 +16,30 @@
   cursor: help;
 }
 
+/* Stable CC-local number for each comment inside its source. */
+.comment-card {
+  grid-template-columns: 34px 42px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.comment-card::before {
+  content: attr(data-internal-number);
+  align-self: start;
+  padding-top: 10px;
+  color: #aaa;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.comment-card.is-selected::before,
+.comment-card.is-highlighted::before {
+  color: var(--accent);
+}
+
 /* Comment emphasis and compact original-link placement. */
 .comment-head-meta {
   flex: 0 0 auto;
@@ -48,6 +72,16 @@
 }
 
 @media (max-width: 680px) {
+  .comment-card {
+    grid-template-columns: 28px 38px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .comment-card::before {
+    padding-top: 9px;
+    font-size: 8px;
+  }
+
   .comment-head-meta {
     align-items: flex-end;
     flex-direction: column;
