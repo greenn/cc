@@ -14,7 +14,7 @@
     <aside class="left-panel" aria-label="Main navigation" title="Navigation, saved views, and source list.">
       <div class="brand">
         <span class="brand-mark">CC</span>
-        <div class="brand-copy"><strong>Comment Collection</strong><span>0.3.6</span></div>
+        <div class="brand-copy"><strong>Comment Collection</strong><span>0.3.7</span></div>
       </div>
       <button class="sidebar-add-link" id="add-link-button" type="button">+ Add link</button>
       <div class="sidebar-main-separator" aria-hidden="true"></div>
@@ -122,7 +122,7 @@
       <div class="dialog-head"><div><p class="eyebrow">New source</p><h2>Add link</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
       <label for="source-url">YouTube, Instagram, VK, or forum URL</label>
       <input id="source-url" name="url" type="url" required placeholder="https://vk.ru/video… or https://holywarsoo.net/viewtopic.php?id=…&p=…" autocomplete="off" />
-      <p class="form-hint">YouTube needs a Data API key. VK video comments need a VK user access token. Instagram uses the CC Browser Helper and your signed-in Chrome session. Holywarsoo topics load one whole forum page per batch.</p>
+      <p class="form-hint">YouTube needs a Data API key. VK uses the connected VK account on your CC backend with automatic token refresh. Instagram uses the CC Browser Helper and your signed-in Chrome session. Holywarsoo topics load one whole forum page per batch.</p>
       <div id="add-link-error" class="form-error" hidden></div>
       <div class="dialog-actions"><button value="cancel" class="ghost-action">Cancel</button><button id="add-source-submit" class="primary-action" value="default">Add source</button></div>
     </form>
@@ -175,9 +175,12 @@
 
       <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
       <div><p class="eyebrow" style="margin-bottom:2px">VK</p><strong style="font-size:13px">VK video comments</strong></div>
-      <label for="vk-access-token">VK user access token</label>
-      <input id="vk-access-token" type="password" autocomplete="off" placeholder="vk1.a.…" />
-      <p class="form-hint">A user token is required by VK API method <code>video.getComments</code>. Keep it private: enter it here, not in GitHub or source code.</p>
+      <p class="form-hint">VK authorization is stored only on your PHP backend. CC automatically refreshes the one-hour access token using the server-side refresh token; no VK token is stored in the browser.</p>
+      <div id="vk-status" class="form-error" hidden></div>
+      <div style="display:flex;justify-content:flex-start;gap:8px">
+        <button id="vk-connect" class="primary-action" type="button">Connect VK</button>
+        <button id="vk-check" class="ghost-action" type="button">Check VK</button>
+      </div>
 
       <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
       <div><p class="eyebrow" style="margin-bottom:2px">Instagram</p><strong style="font-size:13px">CC Browser Helper</strong></div>
