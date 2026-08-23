@@ -95,7 +95,7 @@ function saveTranscript(source, data) {
   renderTranscript(store.getSource(source.id));
 }
 
-async function localWhisperFallback(source, preferredLanguage = 'ru') {
+async function localWhisperFallback(source) {
   meta.textContent = 'No usable YouTube captions. Checking local Whisper…';
   const status = await checkLocalWhisper({ quiet: true });
   if (!status.online) {
@@ -103,7 +103,7 @@ async function localWhisperFallback(source, preferredLanguage = 'ru') {
   }
 
   meta.textContent = `Local Whisper is recognizing the audio · ${status.model || 'model'} · ${status.device || 'device'}…`;
-  const local = await transcribeWithLocalWhisper(source.url, preferredLanguage);
+  const local = await transcribeWithLocalWhisper(source.url, null);
   return {
     ...local,
     ok: true,
@@ -118,7 +118,6 @@ async function recognize(source) {
   const settings = store.getSettings();
   const base = normalizeBaseUrl(settings.backendUrl || DEFAULT_BACKEND_URL);
   const token = String(settings.backendToken || '').trim();
-  if (!token) throw new Error('Add the backend API token in Settings first.');
 
   running = true;
   runButton.disabled = true;
@@ -126,9 +125,16 @@ async function recognize(source) {
   runButton.textContent = 'Recognizing…';
   syncButton();
   setError('');
-  meta.textContent = 'Checking YouTube captions first…';
 
   try {
+    if (!token) {
+      meta.textContent = 'Backend token is not configured. Using local Whisper directly…';
+      const data = await localWhisperFallback(source);
+      saveTranscript(source, data);
+      return;
+    }
+
+    meta.textContent = 'Checking YouTube captions first…';
     const response = await fetch(`${base}/api/transcript.php`, {
       method: 'POST',
       headers: {
@@ -140,20 +146,23 @@ async function recognize(source) {
         videoId: source.externalId,
         url: source.url,
         preferredLanguages: ['ru', 'en'],
+        captionsOnly: true,
       }),
     });
     let data = await readJson(response);
 
     if (!response.ok || !data.ok) {
-      const noCaptions = data.code === 'whisper_not_configured'
+      const captionsUnavailable = data.code === 'captions_unavailable'
+        || data.code === 'whisper_not_configured'
         || String(data.error || '').includes('no YouTube captions')
         || String(data.error || '').includes('empty or unsupported caption track');
+      const backendUnavailable = response.status === 404 || response.status === 405 || response.status >= 500;
 
-      if (!noCaptions) {
+      if (!captionsUnavailable && !backendUnavailable) {
         throw new Error(data.error || `Transcript request failed (${response.status}).`);
       }
 
-      data = await localWhisperFallback(source, 'ru');
+      data = await localWhisperFallback(source);
     }
 
     saveTranscript(source, data);
