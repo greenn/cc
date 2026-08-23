@@ -17,93 +17,90 @@ video_id = 456239337
 
 and loads comments using VK API `video.getComments`.
 
-## Token requirement
+## Authentication model
 
-VK API schema 5.199 marks `video.getComments` as a method requiring a **user access token**. CC requests up to 100 comments at a time and continues with `offset` pagination.
+VK API schema 5.199 marks `video.getComments` as a method requiring a **user access token**. VK ID access tokens are short-lived, so CC does not store them in browser settings anymore.
 
-Do not commit the token and do not put it into public JavaScript. Enter it only in **CC → Settings → VK user access token**.
-
-## VK application for CC
-
-Use a modern **Web** VK ID application.
-
-Recommended values:
+From CC 0.3.7 the flow is:
 
 ```text
-Name: Comment Collection
-Base domain: backend83.nadube.ru
-Trusted Redirect URL: https://backend83.nadube.ru/cc/api/vk-auth.php
+CC browser
+  → authenticated CC backend
+  → one-time VK connection ticket
+  → VK ID OAuth 2.1 + PKCE
+  → access token + refresh token stored in backend SQLite
+  → automatic access-token refresh
+  → video.get / video.getComments
 ```
 
-The public CC UI itself remains at `https://greenn.github.io/cc/`; the backend domain is used as the OAuth return endpoint.
+The browser never receives or displays the VK access token or refresh token.
 
-In the VK application information page a short Russian description can be used:
+## VK ID application
 
-```text
-Веб-приложение для чтения, сохранения и организации комментариев из внешних источников, включая видео ВКонтакте. Авторизация VK ID используется только для получения пользовательского токена, необходимого для чтения доступных пользователю комментариев через VK API.
-```
-
-Short description:
+Create a **VK ID Web application** and register:
 
 ```text
-Чтение и организация комментариев из VK и других источников.
-```
+Base domain:
+backend83.nadube.ru
 
-Official community is not required. Community launch and iOS options are not required for CC.
-
-## OAuth helper
-
-The PHP backend contains:
-
-```text
+Trusted Redirect URL:
 https://backend83.nadube.ru/cc/api/vk-auth.php
 ```
 
-It implements VK ID OAuth 2.1 Authorization Code + PKCE. The flow intentionally does not need the VK protected/client secret; the official VK ID web SDK also exchanges the authorization code using `code_verifier`.
-
-Add the numeric application ID to the private server `config.php`:
+Put the numeric VK ID application ID into the private server `config.php`:
 
 ```php
-'vk_client_id' => 'YOUR_NUMERIC_APP_ID',
+'vk_client_id' => 'YOUR_VK_ID_APP_ID',
 'vk_redirect_uri' => 'https://backend83.nadube.ru/cc/api/vk-auth.php',
 'vk_oauth_scope' => '',
 ```
 
-Then open:
+Do not commit the private `config.php`.
+
+## Connect VK from CC
+
+First configure the PHP backend URL and API token in CC Settings. Then use:
 
 ```text
-https://backend83.nadube.ru/cc/api/vk-auth.php
+Settings → VK → Connect VK
 ```
 
-Press **Connect VK**, complete VK authorization, and copy the returned access token directly into **CC → Settings → VK user access token**.
+CC calls the protected `api/vk-connect.php` endpoint. The backend creates a one-time connection ticket valid for five minutes. The browser opens the ticket URL, VK ID performs OAuth 2.1 + PKCE, and `api/vk-auth.php` stores the resulting credentials in SQLite.
 
-The helper also performs a small `users.get` probe so we can immediately see whether the issued VK ID token is accepted by the classic VK API. This probe is useful because token compatibility can differ across newer VK ID and older VK API methods. `video.getComments` still needs to be tested with a real video after authorization.
+`api/vk-status.php` reports only non-secret connection metadata such as the VK user ID and whether automatic refresh is available.
 
-Do not send the access token in chat and do not commit it to GitHub.
+## Automatic refresh
 
-## Why the CC backend is also required
+The initial VK access token normally expires quickly. CC stores the associated `refresh_token`, `device_id`, and expiry on the backend.
 
-A normal GitHub Pages browser page cannot reliably call the VK API directly because of browser cross-origin restrictions. CC sends VK requests through its restricted PHP proxy:
+Before a VK API request, `api/vk.php` obtains a valid access token from the server-side OAuth store. If the token expires within two minutes, the backend refreshes it through VK ID and stores the rotated access/refresh token pair.
+
+If VK rejects an access token unexpectedly with an authentication-related error, the proxy attempts one forced refresh and retries the read request once.
+
+No manual hourly token copying is required.
+
+## Backend storage
+
+VK OAuth credentials are stored in the same SQLite database configured by `db_path`, in a separate `vk_oauth_tokens` table keyed by CC storage profile.
+
+Keep the SQLite file inaccessible from the web. Prefer a path outside the public web root when the hosting allows it. If it remains under `/cc/data/`, the included `.htaccess` must stay in place.
+
+## VK proxy
+
+The browser does not call `api.vk.ru` directly. CC routes the supported methods through:
 
 ```text
 https://backend83.nadube.ru/cc/api/vk.php
 ```
 
-The proxy only allows the read methods used by CC:
+The proxy only allows:
 
 ```text
 video.get
 video.getComments
 ```
 
-So VK setup requires both:
-
-```text
-CC backend URL + backend API token
-VK user access token
-```
-
-The VK token is sent over HTTPS to the user's own CC backend for the API request; it is not committed to GitHub.
+The browser authenticates to the CC backend using the private CC backend API token. VK credentials never travel back to the browser.
 
 ## API behavior
 
@@ -121,4 +118,4 @@ thread_items_count=10
 v=5.199
 ```
 
-The returned VK user/group data is mapped into the common CC comment model so read/saved/deleted/note behavior works the same as for YouTube and forums.
+The returned VK user/group data is mapped into the common CC comment model so read/saved/highlighted/deleted/note behavior works the same as for other sources.
