@@ -169,7 +169,7 @@ function cc_whisper_fallback(string $videoUrl, array $preferred): array
     if ($payload === false) throw new RuntimeException('Could not encode Whisper request.');
 
     $headers = ['Content-Type: application/json', 'Accept: application/json'];
-    $token = trim((string)($config['whisper_service_token'] ?? ''));
+    $token = trim((string)(cc_config()['whisper_service_token'] ?? ''));
     if ($token !== '') $headers[] = 'Authorization: Bearer ' . $token;
 
     [$status, $raw] = cc_transcript_http($service . '/transcribe', 'POST', $payload, $headers, 1800);
@@ -185,6 +185,7 @@ $body = cc_read_json_body();
 $videoId = cc_youtube_video_id($body);
 $preferred = $body['preferredLanguages'] ?? ['ru', 'en'];
 if (!is_array($preferred)) $preferred = ['ru', 'en'];
+$captionsOnly = !empty($body['captionsOnly']);
 $watchUrl = 'https://www.youtube.com/watch?v=' . rawurlencode($videoId);
 
 try {
@@ -195,6 +196,9 @@ try {
     $track = cc_choose_caption_track($tracks, $preferred);
 
     if (!$track || empty($track['baseUrl'])) {
+        if ($captionsOnly) {
+            cc_error('This video has no usable YouTube captions.', 422, ['code' => 'captions_unavailable']);
+        }
         $fallback = cc_whisper_fallback($watchUrl, $preferred);
         cc_json([
             'ok' => true,
@@ -212,7 +216,12 @@ try {
     if ($captionStatus >= 400) throw new RuntimeException('YouTube captions request failed.');
 
     $segments = cc_decode_json3($captionRaw);
-    if (!$segments) throw new RuntimeException('YouTube returned an empty or unsupported caption track.');
+    if (!$segments) {
+        if ($captionsOnly) {
+            cc_error('YouTube returned an empty or unsupported caption track.', 422, ['code' => 'captions_unavailable']);
+        }
+        throw new RuntimeException('YouTube returned an empty or unsupported caption track.');
+    }
     $text = implode("\n", array_map(fn($segment) => $segment['text'], $segments));
 
     cc_json([
