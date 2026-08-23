@@ -15,7 +15,7 @@ from pydantic import BaseModel, HttpUrl
 from faster_whisper import WhisperModel
 from yt_dlp import YoutubeDL
 
-app = FastAPI(title="CC Whisper service", version="0.3.0")
+app = FastAPI(title="CC Whisper service", version="0.4.0")
 
 DEFAULT_ALLOWED_ORIGINS = [
     "https://greenn.github.io",
@@ -46,9 +46,16 @@ async def local_network_headers(request: Request, call_next):
     return response
 
 
+SUPPORTED_MODELS = {"small", "medium", "large-v3"}
+DEFAULT_MODEL = os.getenv("CC_WHISPER_MODEL", "small").strip() or "small"
+if DEFAULT_MODEL not in SUPPORTED_MODELS:
+    DEFAULT_MODEL = "small"
+
+
 class TranscribeRequest(BaseModel):
     url: HttpUrl
     language: Optional[str] = None
+    model: Optional[str] = None
 
 
 JobProgress = Callable[[str, float, float, str], None]
@@ -57,6 +64,8 @@ JOBS_LOCK = threading.RLock()
 MAX_CONCURRENT_JOBS = max(1, int(os.getenv("CC_WHISPER_MAX_CONCURRENT_JOBS", "1")))
 JOB_SLOTS = threading.Semaphore(MAX_CONCURRENT_JOBS)
 JOB_RETENTION_SECONDS = max(3600, int(os.getenv("CC_WHISPER_JOB_RETENTION_SECONDS", "86400")))
+MODEL_STATE_LOCK = threading.RLock()
+LOADED_MODEL_NAME: Optional[str] = None
 
 
 def now_iso() -> str:
@@ -79,6 +88,13 @@ def normalize_language(value: Optional[str]) -> Optional[str]:
     return language
 
 
+def normalize_model(value: Optional[str]) -> str:
+    model = (value or DEFAULT_MODEL).strip().lower()
+    if model not in SUPPORTED_MODELS:
+        raise ValueError(f"Unsupported Whisper model: {model}. Use small, medium, or large-v3.")
+    return model
+
+
 def cleanup_jobs() -> None:
     cutoff = time.time() - JOB_RETENTION_SECONDS
     with JOBS_LOCK:
@@ -97,7 +113,10 @@ def job_snapshot(job_id: str) -> dict:
     with JOBS_LOCK:
         job = JOBS.get(job_id)
         if not job:
-            raise HTTPException(status_code=404, detail="Transcription job not found. The local Whisper service may have been restarted.")
+            raise HTTPException(
+                status_code=404,
+                detail="Transcription job not found. The local Whisper service may have been restarted.",
+            )
         snapshot = deepcopy(job)
     snapshot.pop("finishedTs", None)
     return snapshot
@@ -113,10 +132,7 @@ def update_job(job_id: str, **patch) -> None:
         old_phase = job.get("phase")
         new_progress = patch.get("progress", old_progress)
         new_phase = patch.get("phase", old_phase)
-        measurable_change = (
-            new_phase != old_phase
-            or float(new_progress or 0) > old_progress + 0.05
-        )
+        measurable_change = new_phase != old_phase or float(new_progress or 0) > old_progress + 0.05
 
         if "progress" in patch:
             patch["progress"] = round(max(0.0, min(100.0, float(patch["progress"]))), 1)
@@ -140,12 +156,16 @@ def heartbeat_loop(job_id: str, stop_event: threading.Event) -> None:
 
 
 @lru_cache(maxsize=1)
-def whisper_model() -> WhisperModel:
-    return WhisperModel(
-        os.getenv("CC_WHISPER_MODEL", "small"),
+def whisper_model(model_name: str) -> WhisperModel:
+    global LOADED_MODEL_NAME
+    model = WhisperModel(
+        model_name,
         device=os.getenv("CC_WHISPER_DEVICE", "cpu"),
         compute_type=os.getenv("CC_WHISPER_COMPUTE_TYPE", "int8"),
     )
+    with MODEL_STATE_LOCK:
+        LOADED_MODEL_NAME = model_name
+    return model
 
 
 def human_bytes_per_second(value: object) -> str:
@@ -236,22 +256,31 @@ def download_audio(url: str, directory: Path, progress: Optional[JobProgress] = 
 
 def transcribe_payload(payload: TranscribeRequest, progress: Optional[JobProgress] = None) -> dict:
     language = normalize_language(payload.language)
+    model_name = normalize_model(payload.model)
+    device = os.getenv("CC_WHISPER_DEVICE", "cpu")
+    compute_type = os.getenv("CC_WHISPER_COMPUTE_TYPE", "int8")
+    total_started = time.perf_counter()
 
     with tempfile.TemporaryDirectory(prefix="cc-whisper-") as tmp:
+        download_started = time.perf_counter()
         audio_path, detected_duration = download_audio(str(payload.url), Path(tmp), progress)
+        download_seconds = time.perf_counter() - download_started
 
         if progress:
             progress(
                 "loading_model",
                 34.0,
                 0.0,
-                "Loading Whisper model. On the first run the model may still be downloading…",
+                f"Loading Whisper {model_name}. On the first run this model may still be downloading…",
             )
-        model = whisper_model()
+        model_started = time.perf_counter()
+        model = whisper_model(model_name)
+        model_load_seconds = time.perf_counter() - model_started
 
         if progress:
-            progress("transcribing", 40.0, 0.0, "Whisper is recognizing speech…")
+            progress("transcribing", 40.0, 0.0, f"Whisper {model_name} is recognizing speech…")
 
+        transcription_started = time.perf_counter()
         segments_iter, info = model.transcribe(
             str(audio_path),
             language=language,
@@ -291,18 +320,34 @@ def transcribe_payload(payload: TranscribeRequest, progress: Optional[JobProgres
                         "transcribing",
                         overall,
                         phase_percent,
-                        f"Recognizing speech · {len(segments)} segments · {segment_end:.0f}s processed",
+                        f"Recognizing with {model_name} · {len(segments)} segments · {segment_end:.0f}s processed",
                     )
                     last_reported = overall
                     last_report_time = current_time
 
+        transcription_seconds = time.perf_counter() - transcription_started
+        total_seconds = time.perf_counter() - total_started
+        text = "\n".join(text_parts)
+        word_count = len(text.split())
+        realtime_factor = (transcription_seconds / duration) if duration > 0 else None
+
         return {
             "ok": True,
             "method": "whisper",
+            "model": model_name,
+            "device": device,
+            "computeType": compute_type,
             "language": info.language or language or "",
             "languageProbability": round(float(info.language_probability or 0), 4),
-            "text": "\n".join(text_parts),
+            "text": text,
             "segments": segments,
+            "wordCount": word_count,
+            "audioDurationSeconds": round(duration, 3),
+            "downloadSeconds": round(download_seconds, 3),
+            "modelLoadSeconds": round(model_load_seconds, 3),
+            "transcriptionSeconds": round(transcription_seconds, 3),
+            "totalSeconds": round(total_seconds, 3),
+            "realtimeFactor": round(realtime_factor, 4) if realtime_factor is not None else None,
         }
 
 
@@ -385,13 +430,18 @@ def health() -> dict:
     with JOBS_LOCK:
         active_jobs = sum(1 for job in JOBS.values() if job.get("status") == "running")
         queued_jobs = sum(1 for job in JOBS.values() if job.get("status") == "queued")
+    with MODEL_STATE_LOCK:
+        loaded_model = LOADED_MODEL_NAME
     return {
         "ok": True,
-        "version": "0.3.0",
-        "model": os.getenv("CC_WHISPER_MODEL", "small"),
+        "version": "0.4.0",
+        "model": DEFAULT_MODEL,
+        "defaultModel": DEFAULT_MODEL,
+        "supportedModels": sorted(SUPPORTED_MODELS),
+        "loadedModel": loaded_model,
         "device": os.getenv("CC_WHISPER_DEVICE", "cpu"),
         "computeType": os.getenv("CC_WHISPER_COMPUTE_TYPE", "int8"),
-        "modelLoaded": whisper_model.cache_info().currsize > 0,
+        "modelLoaded": loaded_model is not None,
         "activeJobs": active_jobs,
         "queuedJobs": queued_jobs,
         "maxConcurrentJobs": MAX_CONCURRENT_JOBS,
@@ -402,16 +452,22 @@ def health() -> dict:
 def create_job(payload: TranscribeRequest, authorization: Optional[str] = Header(default=None)) -> dict:
     require_token(authorization)
     cleanup_jobs()
+    try:
+        model_name = normalize_model(payload.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     job_id = uuid.uuid4().hex
     created_at = now_iso()
     with JOBS_LOCK:
         JOBS[job_id] = {
             "id": job_id,
+            "model": model_name,
             "status": "queued",
             "phase": "queued",
             "progress": 0.0,
             "phaseProgress": 0.0,
-            "message": "Queued for local recognition.",
+            "message": f"Queued for local recognition with {model_name}.",
             "createdAt": created_at,
             "updatedAt": created_at,
             "heartbeatAt": created_at,
@@ -444,5 +500,7 @@ def transcribe(payload: TranscribeRequest, authorization: Optional[str] = Header
     require_token(authorization)
     try:
         return transcribe_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Transcription failed: {exc}") from exc
