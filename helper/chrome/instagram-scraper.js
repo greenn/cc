@@ -17,23 +17,40 @@
   function profileAnchor(node) {
     return [...node.querySelectorAll('a[href]')].find((anchor) => {
       const href = anchor.getAttribute('href') || '';
-      return /^\/[A-Za-z0-9._]+\/$/.test(href) && !href.startsWith('/explore/') && !href.startsWith('/accounts/');
+      return /^\/[A-Za-z0-9._]+\/?(?:\?.*)?$/.test(href)
+        && !href.startsWith('/explore/')
+        && !href.startsWith('/accounts/')
+        && !href.startsWith('/direct/');
     }) || null;
   }
 
+  function isUiText(text, username = '') {
+    const value = String(text || '').trim();
+    if (!value || value === username || value === `@${username}`) return true;
+    return /^(reply|replies|like|likes|see translation|edited|more|view replies|view \d+ replies|view all \d+ replies|load more comments|view more comments|view all \d+ comments|\d+[smhdw]|\d+\s*(seconds?|minutes?|hours?|days?|weeks?)\s*ago|ответить|ответы|нравится|отметок? «?нравится»?|показать перевод|изменено|ещ[её]|посмотреть ответы|показать ответы|показать все ответы|показать ещё комментарии|загрузить еще комментарии|посмотреть все комментарии)$/i.test(value);
+  }
+
   function cleanCandidateText(node, username) {
-    const uiText = /^(reply|like|likes|see translation|view replies|view \d+ replies|load more comments|more|ответить|нравится|отметок «нравится»|посмотреть ответы|показать ответы|показать ещё комментарии|загрузить еще комментарии)$/i;
-    const values = [...node.querySelectorAll('span')]
+    const leafSpans = [...node.querySelectorAll('span')]
+      .filter((span) => !span.querySelector('span'))
       .map((span) => (span.innerText || span.textContent || '').trim())
-      .filter(Boolean)
-      .filter((text) => text !== username && !uiText.test(text));
+      .filter((text) => text.length > 1 && !isUiText(text, username));
 
-    const unique = [...new Set(values)];
-    const likely = unique.filter((text) => text.length > 1 && !/^\d+[smhdw]$/i.test(text));
-    if (likely.length) return likely.sort((a, b) => b.length - a.length)[0];
+    const uniqueLeaf = [...new Set(leafSpans)];
+    const usefulLeaf = uniqueLeaf.filter((text) => {
+      if (/^[\d.,\s]+[kKmMкКмМ]?\s*(likes?|отмет)/i.test(text)) return false;
+      if (/^(view|show|посмотреть|показать)\s+\d+/i.test(text)) return false;
+      return true;
+    });
+    if (usefulLeaf.length) return usefulLeaf.sort((a, b) => b.length - a.length)[0];
 
-    const lines = (node.innerText || '').split('\n').map((line) => line.trim()).filter(Boolean);
-    return lines.find((line) => line !== username && !uiText.test(line)) || '';
+    const lines = (node.innerText || '')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 1 && !isUiText(line, username))
+      .filter((line) => !/^[\d.,\s]+[kKmMкКмМ]?\s*(likes?|отмет)/i.test(line));
+
+    return [...new Set(lines)].sort((a, b) => b.length - a.length)[0] || '';
   }
 
   function parseNumber(text) {
@@ -56,18 +73,72 @@
     };
   }
 
+  function commentPermalink(node) {
+    return [...node.querySelectorAll('a[href]')].find((anchor) => {
+      const href = anchor.getAttribute('href') || '';
+      return /\/c\/|[?&]comment_id=/i.test(href);
+    }) || null;
+  }
+
+  function candidateScore(node) {
+    if (!node || !profileAnchor(node)) return Infinity;
+    const textLength = (node.innerText || '').trim().length;
+    if (textLength < 2 || textLength > 4000) return Infinity;
+    const profiles = node.querySelectorAll('a[href^="/"]').length;
+    const hasTime = Boolean(node.querySelector('time'));
+    const hasPermalink = Boolean(commentPermalink(node));
+    if (!hasTime && !hasPermalink) return Infinity;
+    return textLength + profiles * 150 - (hasPermalink ? 500 : 0);
+  }
+
+  function nearestCommentContainer(seed, root) {
+    let node = seed?.nodeType === Node.ELEMENT_NODE ? seed : seed?.parentElement;
+    let best = null;
+    let bestScore = Infinity;
+    for (let depth = 0; node && depth < 9; depth += 1, node = node.parentElement) {
+      if (root && !root.contains(node)) break;
+      const score = candidateScore(node);
+      if (score < bestScore) {
+        best = node;
+        bestScore = score;
+      }
+      if (node.matches?.('li')) break;
+    }
+    return best;
+  }
+
   function commentNodes() {
-    const roots = [document.querySelector('[role="dialog"]'), document.querySelector('article'), document.body].filter(Boolean);
+    const roots = [
+      document.querySelector('[role="dialog"]'),
+      document.querySelector('main article'),
+      document.querySelector('article'),
+      document.querySelector('main'),
+      document.body,
+    ].filter(Boolean);
+
     const seen = new Set();
     const nodes = [];
+    const push = (node) => {
+      if (!node || seen.has(node) || !profileAnchor(node)) return;
+      seen.add(node);
+      nodes.push(node);
+    };
+
     for (const root of roots) {
-      for (const node of root.querySelectorAll('ul li')) {
-        if (seen.has(node)) continue;
-        seen.add(node);
-        if (!profileAnchor(node)) continue;
-        nodes.push(node);
-      }
+      // Older Instagram markup used UL/LI for comments.
+      root.querySelectorAll('ul li').forEach(push);
+
+      // Current markup usually gives each comment timestamp/permalink even when
+      // the surrounding UL/LI structure changes. Start from the most specific
+      // anchors/times and walk up to the smallest useful comment container.
+      root.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').forEach((anchor) => {
+        push(nearestCommentContainer(anchor, root));
+      });
+      root.querySelectorAll('time').forEach((time) => {
+        push(nearestCommentContainer(time, root));
+      });
     }
+
     return nodes;
   }
 
@@ -78,7 +149,7 @@
     for (const node of commentNodes()) {
       const authorLink = profileAnchor(node);
       if (!authorLink) continue;
-      const username = (authorLink.getAttribute('href') || '').split('/').filter(Boolean)[0] || (authorLink.textContent || '').trim();
+      const username = (authorLink.getAttribute('href') || '').split('?')[0].split('/').filter(Boolean)[0] || (authorLink.textContent || '').trim();
       if (!username) continue;
 
       const text = cleanCandidateText(node, username);
@@ -86,7 +157,7 @@
 
       const time = node.querySelector('time');
       const publishedAt = time?.getAttribute('datetime') || null;
-      const permalink = [...node.querySelectorAll('a[href]')].find((anchor) => /\/c\/|comment_id=/i.test(anchor.getAttribute('href') || ''));
+      const permalink = commentPermalink(node);
       let originalUrl = url;
       let explicitId = '';
       if (permalink) {
@@ -123,54 +194,99 @@
 
   function moreButtons() {
     const patterns = [
-      /view .*comments?/i,
+      /view (?:all )?.*comments?/i,
       /load more comments/i,
-      /view .*repl(?:y|ies)/i,
-      /показать .*комментар/i,
+      /view more comments/i,
+      /view (?:all )?.*repl(?:y|ies)/i,
+      /показать (?:все )?.*комментар/i,
+      /посмотреть (?:все )?.*комментар/i,
       /загрузить еще комментар/i,
-      /посмотреть .*ответ/i,
-      /показать .*ответ/i,
+      /загрузить ещё комментар/i,
+      /посмотреть (?:все )?.*ответ/i,
+      /показать (?:все )?.*ответ/i,
     ];
 
-    return [...document.querySelectorAll('button, [role="button"]')].filter((button) => {
-      const text = (button.innerText || button.getAttribute('aria-label') || '').trim();
-      return text && patterns.some((pattern) => pattern.test(text));
+    const candidates = new Set(document.querySelectorAll('button, [role="button"]'));
+    document.querySelectorAll('[aria-label]').forEach((node) => {
+      const clickable = node.closest('button, [role="button"]');
+      if (clickable) candidates.add(clickable);
     });
+
+    return [...candidates].filter((button) => {
+      const text = [
+        button.innerText,
+        button.getAttribute('aria-label'),
+        button.querySelector('[aria-label]')?.getAttribute('aria-label'),
+      ].filter(Boolean).join(' ').trim();
+      if (!text || !patterns.some((pattern) => pattern.test(text))) return false;
+      const rect = button.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+  }
+
+  async function waitForInitialComments(url, sourceId, timeoutMs = 10000) {
+    const deadline = Date.now() + timeoutMs;
+    let best = [];
+    while (Date.now() < deadline) {
+      if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
+      const current = collect(url, sourceId);
+      if (current.length > best.length) best = current;
+      if (current.length > 0 || moreButtons().length > 0) return best;
+      await sleep(500);
+    }
+    return best;
   }
 
   async function loadAndCollect(url, sourceId, maxClicks) {
     if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
 
-    let previousCount = 0;
+    await waitForInitialComments(url, sourceId);
+
+    let previousCount = -1;
     let stableRounds = 0;
     let clicks = 0;
 
-    while (clicks < maxClicks && stableRounds < 3) {
+    while (clicks < maxClicks && stableRounds < 4) {
       const current = collect(url, sourceId);
       if (current.length === previousCount) stableRounds += 1;
       else stableRounds = 0;
       previousCount = current.length;
 
       const buttons = moreButtons();
-      if (!buttons.length) break;
+      if (!buttons.length) {
+        await sleep(650);
+        if (!moreButtons().length) break;
+        continue;
+      }
+
       const button = buttons[0];
       try {
         button.scrollIntoView({ block: 'center' });
+        await sleep(120);
         button.click();
         clicks += 1;
-        await sleep(850);
+        await sleep(1000);
       } catch {
         break;
       }
     }
 
-    await sleep(300);
+    await sleep(500);
     const comments = collect(url, sourceId);
+    const diagnostics = {
+      commentCandidates: commentNodes().length,
+      permalinkAnchors: document.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').length,
+      timestamps: document.querySelectorAll('time').length,
+      loadButtons: moreButtons().length,
+      loggedOut: isLoggedOut(),
+    };
+
     return {
       comments,
       clicks,
       pageUrl: location.href,
-      note: 'Instagram DOM is private implementation detail and may require selector updates after Instagram UI changes.',
+      diagnostics,
+      note: 'Instagram DOM is a private implementation detail and may require selector updates after Instagram UI changes.',
     };
   }
 
