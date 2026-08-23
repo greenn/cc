@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '0.4.6';
+  const VERSION = '0.4.7';
   const startedAt = performance.now();
   const prefix = `[CC ${VERSION}]`;
 
@@ -51,6 +51,7 @@
       resources: performance.getEntriesByType('resource').length,
       commentCards: document.querySelectorAll('.comment-card').length,
       sourceCards: document.querySelectorAll('.source-overview-card').length,
+      avatars: window.__CC_AVATARS__ || null,
     });
   }, { once: true });
 
@@ -65,6 +66,7 @@
       commentCards: document.querySelectorAll('.comment-card').length,
       sourceCards: document.querySelectorAll('.source-overview-card').length,
       activeSource: document.querySelector('.source-item.is-active')?.dataset.sourceId || null,
+      avatars: window.__CC_AVATARS__ || null,
       url: location.href,
     });
   }, 5000);
