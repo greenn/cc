@@ -11,6 +11,7 @@ const output = $('#transcript-text');
 const errorBox = $('#transcript-error');
 const runButton = $('#transcript-run');
 const copyButton = $('#transcript-copy');
+const sourcesList = $('#sources-list');
 
 let activeSourceId = null;
 let running = false;
@@ -63,7 +64,9 @@ function syncButton() {
   const isYouTube = source?.platform === 'youtube';
   button.hidden = !isYouTube;
   activeSourceId = isYouTube ? source.id : null;
-  if (isYouTube) button.textContent = source.transcript ? 'Transcript' : 'Recognize video';
+  if (!isYouTube) return;
+  const label = running ? 'Recognizing…' : source.transcript ? 'Transcript' : 'Recognize video';
+  if (button.textContent !== label) button.textContent = label;
 }
 
 async function readJson(response) {
@@ -87,7 +90,7 @@ async function recognize(source) {
   runButton.disabled = true;
   button.disabled = true;
   runButton.textContent = 'Recognizing…';
-  button.textContent = 'Recognizing…';
+  syncButton();
   setError('');
   meta.textContent = 'Checking YouTube captions first…';
 
@@ -169,12 +172,14 @@ copyButton?.addEventListener('click', async (event) => {
   }
 });
 
-new MutationObserver(syncButton).observe(document.body, {
-  subtree: true,
-  childList: true,
-  attributes: true,
-  attributeFilter: ['class'],
-});
+if (sourcesList) {
+  new MutationObserver(syncButton).observe(sourcesList, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
+}
 
 document.addEventListener('click', () => setTimeout(syncButton, 0));
 syncButton();
