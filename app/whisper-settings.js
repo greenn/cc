@@ -16,6 +16,8 @@ const sourcesList = $('#sources-list');
 let lastStatus = {
   online: false,
   model: '',
+  loadedModel: '',
+  supportedModels: [],
   device: '',
   version: '',
   modelLoaded: false,
@@ -61,9 +63,12 @@ function renderIndicator() {
     ? jobs > 0 ? `Whisper online · ${jobs} job${jobs === 1 ? '' : 's'}` : 'Whisper online'
     : 'Whisper offline';
 
+  const loaded = lastStatus.loadedModel
+    ? ` · loaded ${lastStatus.loadedModel}`
+    : lastStatus.modelLoaded ? ' · model loaded' : ' · no model loaded yet';
   indicator.title = lastStatus.online
-    ? `Local Whisper is running${lastStatus.model ? ` · ${lastStatus.model}` : ''}${lastStatus.device ? ` · ${lastStatus.device}` : ''}${lastStatus.modelLoaded ? ' · model loaded' : ' · model not loaded yet'}`
-    : 'Local Whisper is not reachable. YouTube captions can still be used.';
+    ? `Local Whisper is running${lastStatus.device ? ` · ${lastStatus.device}` : ''}${loaded}`
+    : 'Local Whisper is not reachable.';
 }
 
 function showStatus(message, kind = 'info') {
@@ -121,7 +126,9 @@ export async function checkLocalWhisper({ quiet = false } = {}) {
 
     lastStatus = {
       online: true,
-      model: String(data.model || ''),
+      model: String(data.defaultModel || data.model || ''),
+      loadedModel: String(data.loadedModel || ''),
+      supportedModels: Array.isArray(data.supportedModels) ? data.supportedModels.map(String) : [],
       device: String(data.device || ''),
       version: String(data.version || ''),
       modelLoaded: Boolean(data.modelLoaded),
@@ -130,13 +137,15 @@ export async function checkLocalWhisper({ quiet = false } = {}) {
       checkedAt: Date.now(),
     };
     if (!quiet) {
-      const loaded = lastStatus.modelLoaded ? 'model loaded' : 'model loads on first recognition';
-      showStatus(`Local Whisper connected · ${lastStatus.model || 'model ?'} · ${lastStatus.device || 'device ?'} · ${loaded}.`, 'success');
+      const loaded = lastStatus.loadedModel ? `loaded ${lastStatus.loadedModel}` : 'model loads on first recognition';
+      showStatus(`Local Whisper connected · ${lastStatus.device || 'device ?'} · ${loaded}.`, 'success');
     }
   } catch (error) {
     lastStatus = {
       ...lastStatus,
       online: false,
+      loadedModel: '',
+      supportedModels: [],
       modelLoaded: false,
       activeJobs: 0,
       queuedJobs: 0,
@@ -152,12 +161,12 @@ export async function checkLocalWhisper({ quiet = false } = {}) {
   return lastStatus;
 }
 
-export async function createLocalWhisperJob(videoUrl, language = null) {
+export async function createLocalWhisperJob(videoUrl, language = null, model = 'small') {
   const { url } = getLocalWhisperSettings();
   const response = await localRequest(`${url}/jobs`, {
     method: 'POST',
     headers: requestHeaders(true),
-    body: JSON.stringify({ url: videoUrl, language }),
+    body: JSON.stringify({ url: videoUrl, language, model }),
   });
   const data = await readLocalResponse(response, 'Could not start local Whisper job');
   if (!data.job?.id) throw new Error('Local Whisper did not return a job id.');
@@ -175,12 +184,12 @@ export async function getLocalWhisperJob(jobId) {
   return data.job;
 }
 
-export async function transcribeWithLocalWhisper(videoUrl, language = null) {
+export async function transcribeWithLocalWhisper(videoUrl, language = null, model = 'small') {
   const { url } = getLocalWhisperSettings();
   const response = await localRequest(`${url}/transcribe`, {
     method: 'POST',
     headers: requestHeaders(true),
-    body: JSON.stringify({ url: videoUrl, language }),
+    body: JSON.stringify({ url: videoUrl, language, model }),
   });
   return readLocalResponse(response, 'Local Whisper request failed');
 }
