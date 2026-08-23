@@ -22,22 +22,16 @@ function parseVkVideoTarget(value) {
   return null;
 }
 
-function requireToken(settings) {
-  const token = String(settings?.vkAccessToken || '').trim();
-  if (!token) throw new Error('Add a VK user access token in Settings first.');
-  return token;
-}
-
 function requireBackend(settings) {
   const base = String(settings?.backendUrl || 'https://backend83.nadube.ru/cc').trim().replace(/\/+$/, '');
   const backendToken = String(settings?.backendToken || '').trim();
-  if (!backendToken) throw new Error('VK requests use the CC PHP backend because api.vk.com is blocked by browser CORS. Configure the backend URL and API token in Settings first.');
-  return { base, backendToken };
+  const profile = String(settings?.backendProfile || 'default').trim() || 'default';
+  if (!backendToken) throw new Error('VK requests use the CC PHP backend. Configure the backend URL and API token in Settings first.');
+  return { base, backendToken, profile };
 }
 
 async function vkApi(method, params, settings) {
-  const accessToken = requireToken(settings);
-  const { base, backendToken } = requireBackend(settings);
+  const { base, backendToken, profile } = requireBackend(settings);
   const response = await fetch(`${base}/api/vk.php`, {
     method: 'POST',
     headers: {
@@ -48,7 +42,7 @@ async function vkApi(method, params, settings) {
     body: JSON.stringify({
       method,
       params,
-      accessToken,
+      profile,
       v: VK_API_VERSION,
     }),
   });
@@ -111,9 +105,9 @@ export const vkAdapter = {
     let author = 'VK';
     let thumbnail = '';
     let commentCount = null;
-    const token = String(settings.vkAccessToken || '').trim();
+    const backendReady = Boolean(String(settings.backendToken || '').trim());
 
-    if (token && settings.backendToken) {
+    if (backendReady) {
       try {
         const videos = `${target.ownerId}_${target.videoId}${target.accessKey ? `_${target.accessKey}` : ''}`;
         const info = await vkApi('video.get', { videos, extended: 1 }, settings);
@@ -146,7 +140,7 @@ export const vkAdapter = {
       loadedCount: 0,
       nextCursor: '0',
       hasMore: true,
-      integrationStatus: token ? 'ready' : 'token-required',
+      integrationStatus: backendReady ? 'server-managed' : 'backend-required',
       lastVisibleCommentId: null,
       lastOpenedAt: null,
       addedAt: new Date().toISOString(),
@@ -155,7 +149,6 @@ export const vkAdapter = {
   },
 
   async getComments(source, cursor, _limit, settings = {}) {
-    requireToken(settings);
     requireBackend(settings);
     const offset = Math.max(0, Number.parseInt(cursor || '0', 10) || 0);
     const response = await vkApi('video.getComments', {
