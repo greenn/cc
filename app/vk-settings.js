@@ -138,7 +138,7 @@ async function connectVk(event) {
       throw new Error(data.error || `Could not start VK connection (${response.status}).`);
     }
 
-    const authWindow = window.open(data.connectUrl, '_blank', 'noopener');
+    const authWindow = window.open(data.connectUrl, '_blank');
     if (!authWindow) throw new Error('Browser blocked the VK authorization window. Allow pop-ups for CC and try again.');
     show('VK authorization opened in a new tab. Finish it there; CC will detect the connection automatically.');
     startPolling();
