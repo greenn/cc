@@ -1,3 +1,49 @@
+const CC_PAGE_PATTERNS = [
+  'https://greenn.github.io/cc/*',
+  'https://*.nadube.ru/*',
+  'http://localhost/*',
+  'http://127.0.0.1/*',
+];
+
+function setGlobalBadge() {
+  chrome.action.setBadgeText({ text: 'ON' });
+  chrome.action.setBadgeBackgroundColor({ color: '#198754' });
+  chrome.action.setTitle({ title: 'CC Browser Helper — running' });
+}
+
+function setConnectedBadge(tabId) {
+  if (!tabId) return;
+  chrome.action.setBadgeText({ tabId, text: 'CC' });
+  chrome.action.setBadgeBackgroundColor({ tabId, color: '#198754' });
+  chrome.action.setTitle({ tabId, title: 'CC Browser Helper — connected to CC' });
+}
+
+async function injectBridgeIntoOpenCcTabs() {
+  const tabs = await chrome.tabs.query({ url: CC_PAGE_PATTERNS });
+  await Promise.all(tabs.filter((tab) => tab.id).map(async (tab) => {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['cc-bridge.js'],
+      });
+      setConnectedBadge(tab.id);
+    } catch {
+      // Some special/restoring tabs cannot be injected yet; normal content-script loading will handle them later.
+    }
+  }));
+}
+
+setGlobalBadge();
+
+chrome.runtime.onInstalled.addListener(() => {
+  setGlobalBadge();
+  injectBridgeIntoOpenCcTabs();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  setGlobalBadge();
+});
+
 function waitForTabComplete(tabId, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -76,10 +122,18 @@ async function collectInstagram(payload) {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'CC_HELPER_BRIDGE_READY') {
+    setConnectedBadge(sender.tab?.id);
+    sendResponse({ ok: true });
+    return false;
+  }
+
   if (message?.type !== 'CC_HELPER_REQUEST') return false;
 
   (async () => {
+    setConnectedBadge(sender.tab?.id);
+
     if (message.action === 'ping') {
       return { version: chrome.runtime.getManifest().version, capabilities: ['instagram'] };
     }
