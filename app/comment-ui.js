@@ -1,4 +1,5 @@
 import { store } from './store.js';
+import './source-navigation.js';
 
 const contentArea = document.querySelector('#content-area');
 const commentsList = document.querySelector('#comments-list');
