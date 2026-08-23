@@ -66,6 +66,7 @@
             <p class="content-meta" id="content-meta">Add a YouTube, Instagram, VK, or supported forum link to start.</p>
           </div>
           <div class="header-actions">
+            <span class="whisper-indicator is-offline" id="whisper-indicator" hidden title="Local Whisper service status"><span class="whisper-dot"></span><span id="whisper-indicator-text">Whisper offline</span></span>
             <button class="ghost-action" id="refresh-button" type="button" hidden>Refresh</button>
             <button class="primary-action" id="transcribe-button" type="button" hidden>Recognize video</button>
           </div>
@@ -132,7 +133,7 @@
         <div><p class="eyebrow">YouTube video</p><h2 id="transcript-title">Transcript</h2></div>
         <button value="cancel" class="dialog-close" aria-label="Close">×</button>
       </div>
-      <p id="transcript-meta" class="transcript-meta">YouTube captions are checked first. If none exist, CC can use Whisper.</p>
+      <p id="transcript-meta" class="transcript-meta">YouTube captions are checked first. If none exist, CC can use local Whisper.</p>
       <textarea id="transcript-text" class="transcript-text" readonly placeholder="Recognized text will appear here…"></textarea>
       <div id="transcript-error" class="form-error" hidden></div>
       <div class="dialog-actions">
@@ -151,6 +152,16 @@
       <label for="youtube-api-key">YouTube Data API key</label>
       <input id="youtube-api-key" type="password" autocomplete="off" placeholder="AIza…" />
       <p class="form-hint">Stored only in this browser via localStorage. Enable YouTube Data API v3 in Google Cloud, then create an API key.</p>
+
+      <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
+      <div><p class="eyebrow" style="margin-bottom:2px">Local transcription</p><strong style="font-size:13px">Whisper on this computer</strong></div>
+      <label for="whisper-service-url">Local Whisper URL</label>
+      <input id="whisper-service-url" type="url" autocomplete="off" value="http://127.0.0.1:8787" placeholder="http://127.0.0.1:8787" />
+      <label for="whisper-service-token">Local Whisper token (optional)</label>
+      <input id="whisper-service-token" type="password" autocomplete="off" placeholder="Leave empty for local-only use" />
+      <p class="form-hint">CC checks this local service directly from the browser. It is used only when a YouTube video has no usable caption track.</p>
+      <div id="whisper-status" class="form-error" hidden></div>
+      <div style="display:flex;justify-content:flex-start"><button id="whisper-check" class="ghost-action" type="button">Check local Whisper</button></div>
 
       <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
       <div><p class="eyebrow" style="margin-bottom:2px">VK</p><strong style="font-size:13px">VK video comments</strong></div>
@@ -196,6 +207,7 @@
   <script type="module" src="./vk-settings.js"></script>
   <script type="module" src="./helper-settings.js"></script>
   <script type="module" src="./backend-settings.js"></script>
+  <script type="module" src="./whisper-settings.js"></script>
   <script type="module" src="./transcript.js"></script>
 </body>
 </html>
