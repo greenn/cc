@@ -54,21 +54,28 @@ function currentSourceIsYouTube() {
 
 function renderIndicator() {
   if (!indicator || !indicatorText) return;
-  indicator.hidden = !currentSourceIsYouTube();
+
+  const shouldHide = !currentSourceIsYouTube();
+  if (indicator.hidden !== shouldHide) indicator.hidden = shouldHide;
   indicator.classList.toggle('is-online', lastStatus.online);
   indicator.classList.toggle('is-offline', !lastStatus.online);
 
   const jobs = Number(lastStatus.activeJobs || 0) + Number(lastStatus.queuedJobs || 0);
-  indicatorText.textContent = lastStatus.online
+  const nextText = lastStatus.online
     ? jobs > 0 ? `Whisper online · ${jobs} job${jobs === 1 ? '' : 's'}` : 'Whisper online'
     : 'Whisper offline';
+
+  // Do not replace the text node when nothing changed. Replacing it on every
+  // status poll destroys a user's active text selection and makes copy fail.
+  if (indicatorText.textContent !== nextText) indicatorText.textContent = nextText;
 
   const loaded = lastStatus.loadedModel
     ? ` · loaded ${lastStatus.loadedModel}`
     : lastStatus.modelLoaded ? ' · model loaded' : ' · no model loaded yet';
-  indicator.title = lastStatus.online
+  const nextTitle = lastStatus.online
     ? `Local Whisper is running${lastStatus.device ? ` · ${lastStatus.device}` : ''}${loaded}`
     : 'Local Whisper is not reachable.';
+  if (indicator.title !== nextTitle) indicator.title = nextTitle;
 }
 
 function showStatus(message, kind = 'info') {
@@ -238,7 +245,9 @@ if (sourcesList) {
   });
 }
 
-document.addEventListener('click', () => setTimeout(renderIndicator, 0));
+document.addEventListener('click', (event) => {
+  if (event.target.closest?.('.source-item')) setTimeout(renderIndicator, 0);
+});
 fillSettings();
 setInterval(() => {
   if (document.visibilityState === 'visible') checkLocalWhisper({ quiet: true });
