@@ -20,6 +20,13 @@ return [
         'http://127.0.0.1:8000',
     ],
 
+    // VK ID OAuth 2.1 / PKCE.
+    // Put the numeric VK application ID here. The client secret is not needed by this PKCE flow.
+    'vk_client_id' => '',
+    'vk_redirect_uri' => 'https://backend83.nadube.ru/cc/api/vk-auth.php',
+    // Leave empty initially. Add a VK ID scope only when it is explicitly required and supported.
+    'vk_oauth_scope' => '',
+
     // Optional Whisper fallback for YouTube videos that have no caption track.
     // Example: http://127.0.0.1:8787 when the Python service runs on the same server.
     'whisper_service_url' => '',
