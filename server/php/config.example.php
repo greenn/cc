@@ -20,6 +20,11 @@ return [
         'http://127.0.0.1:8000',
     ],
 
+    // Optional Whisper fallback for YouTube videos that have no caption track.
+    // Example: http://127.0.0.1:8787 when the Python service runs on the same server.
+    'whisper_service_url' => '',
+    'whisper_service_token' => '',
+
     // Maximum JSON request body size. Current CC state is small; 20 MB leaves room to grow.
     'max_body_bytes' => 20 * 1024 * 1024,
 

@@ -7,6 +7,7 @@
   <title>CC — Comment Collection</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="stylesheet" href="./ui-state.css" />
+  <link rel="stylesheet" href="./transcript.css" />
 </head>
 <body>
   <main class="app-shell">
@@ -15,6 +16,8 @@
         <span class="brand-mark">CC</span>
         <div class="brand-copy"><strong>Comment Collection</strong><span>Reader</span></div>
       </div>
+      <button class="sidebar-add-link" id="add-link-button" type="button">+ Add link</button>
+      <div class="sidebar-main-separator" aria-hidden="true"></div>
 
       <nav class="left-nav" id="main-nav">
         <button class="nav-item is-active" data-view="sources"><span class="nav-icon">▦</span><span>Sources</span></button>
@@ -64,7 +67,7 @@
           </div>
           <div class="header-actions">
             <button class="ghost-action" id="refresh-button" type="button" hidden>Refresh</button>
-            <button class="primary-action" id="add-link-button" type="button">+ Add link</button>
+            <button class="primary-action" id="transcribe-button" type="button" hidden>Recognize video</button>
           </div>
         </div>
 
@@ -123,6 +126,23 @@
     </form>
   </dialog>
 
+  <dialog id="transcript-dialog" class="dialog transcript-dialog">
+    <form method="dialog" class="dialog-card transcript-card">
+      <div class="dialog-head">
+        <div><p class="eyebrow">YouTube video</p><h2 id="transcript-title">Transcript</h2></div>
+        <button value="cancel" class="dialog-close" aria-label="Close">×</button>
+      </div>
+      <p id="transcript-meta" class="transcript-meta">YouTube captions are checked first. If none exist, CC can use Whisper.</p>
+      <textarea id="transcript-text" class="transcript-text" readonly placeholder="Recognized text will appear here…"></textarea>
+      <div id="transcript-error" class="form-error" hidden></div>
+      <div class="dialog-actions">
+        <button id="transcript-copy" class="ghost-action" type="button" disabled>Copy text</button>
+        <button id="transcript-run" class="primary-action" type="button">Recognize</button>
+        <button value="cancel" class="ghost-action">Close</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="settings-dialog" class="dialog">
     <form method="dialog" id="settings-form" class="dialog-card">
       <div class="dialog-head"><div><p class="eyebrow">Application settings</p><h2>Settings</h2></div><button value="cancel" class="dialog-close" aria-label="Close">×</button></div>
@@ -176,5 +196,6 @@
   <script type="module" src="./vk-settings.js"></script>
   <script type="module" src="./helper-settings.js"></script>
   <script type="module" src="./backend-settings.js"></script>
+  <script type="module" src="./transcript.js"></script>
 </body>
 </html>
