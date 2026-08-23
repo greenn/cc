@@ -4,6 +4,7 @@ export const DEFAULT_WHISPER_URL = 'http://127.0.0.1:8787';
 const $ = (selector) => document.querySelector(selector);
 
 const settingsButton = $('#settings-button');
+const settingsDialog = $('#settings-dialog');
 const settingsForm = $('#settings-form');
 const serviceUrlInput = $('#whisper-service-url');
 const tokenInput = $('#whisper-service-token');
@@ -50,6 +51,10 @@ function localRequest(url, options = {}) {
 function currentSourceIsYouTube() {
   const active = document.querySelector('.source-item.is-active');
   return active?.querySelector('.source-platform')?.textContent?.trim() === '▶';
+}
+
+function shouldPollWhisper() {
+  return currentSourceIsYouTube() || Boolean(settingsDialog?.open);
 }
 
 function renderIndicator() {
@@ -201,7 +206,7 @@ export async function transcribeWithLocalWhisper(videoUrl, language = null, mode
   return readLocalResponse(response, 'Local Whisper request failed');
 }
 
-function fillSettings() {
+function fillSettings({ check = true } = {}) {
   const settings = getLocalWhisperSettings();
   if (serviceUrlInput) serviceUrlInput.value = settings.url;
   if (tokenInput) tokenInput.value = settings.token;
@@ -209,10 +214,10 @@ function fillSettings() {
     statusBox.hidden = true;
     statusBox.textContent = '';
   }
-  checkLocalWhisper({ quiet: true });
+  if (check) checkLocalWhisper({ quiet: true });
 }
 
-settingsButton?.addEventListener('click', fillSettings);
+settingsButton?.addEventListener('click', () => fillSettings({ check: true }));
 
 settingsForm?.addEventListener('submit', (event) => {
   if (event.submitter?.value === 'cancel') return;
@@ -237,7 +242,13 @@ checkButton?.addEventListener('click', async (event) => {
 });
 
 if (sourcesList) {
-  new MutationObserver(renderIndicator).observe(sourcesList, {
+  new MutationObserver(() => {
+    const wasYouTube = !indicator?.hidden;
+    renderIndicator();
+    if (currentSourceIsYouTube() && (!wasYouTube || Date.now() - lastStatus.checkedAt > 15000)) {
+      checkLocalWhisper({ quiet: true });
+    }
+  }).observe(sourcesList, {
     subtree: true,
     childList: true,
     attributes: true,
@@ -246,9 +257,22 @@ if (sourcesList) {
 }
 
 document.addEventListener('click', (event) => {
-  if (event.target.closest?.('.source-item')) setTimeout(renderIndicator, 0);
+  if (!event.target.closest?.('.source-item')) return;
+  setTimeout(() => {
+    renderIndicator();
+    if (currentSourceIsYouTube() && Date.now() - lastStatus.checkedAt > 5000) {
+      checkLocalWhisper({ quiet: true });
+    }
+  }, 0);
 });
-fillSettings();
+
+// Populate fields only. Do not contact 127.0.0.1 while the user is simply
+// opening the title/Sources page.
+fillSettings({ check: false });
+renderIndicator();
+
 setInterval(() => {
-  if (document.visibilityState === 'visible') checkLocalWhisper({ quiet: true });
+  if (document.visibilityState === 'visible' && shouldPollWhisper()) {
+    checkLocalWhisper({ quiet: true });
+  }
 }, 15000);
