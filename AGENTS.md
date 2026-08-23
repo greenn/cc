@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.5`.
+Current baseline version: `0.4.6`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.5`;
-- another change on the same day: `0.4.6`;
+- current version: `0.4.6`;
+- another change on the same day: `0.4.7`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -43,6 +43,7 @@ These are default product conventions for applications we build:
 - Navigable application state must be represented in the URL so refresh, copy-link, Back, and Forward preserve where the user is.
 - Prefer explicit URL state such as `view`, `source`, `filter`, and selected item identifiers rather than invisible navigation-only state.
 - Archive is a separate source view; archived sources should not clutter the normal Sources list.
+- On initial load, do not render an arbitrary first source before applying the URL route. The Home/Sources route must boot directly into the lightweight source overview without creating comment cards or starting avatar/network requests for a source the user did not open.
 
 ## UI reference
 
