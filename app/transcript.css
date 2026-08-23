@@ -30,6 +30,38 @@
   margin-top: 0;
 }
 
+.whisper-indicator {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: #777;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.whisper-indicator[hidden] {
+  display: none;
+}
+
+.whisper-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b8b8b8;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.04);
+}
+
+.whisper-indicator.is-online {
+  color: #176b2c;
+}
+
+.whisper-indicator.is-online .whisper-dot {
+  background: #2aa44f;
+  box-shadow: 0 0 0 2px rgba(42,164,79,.13);
+}
+
 .transcript-dialog {
   width: min(760px, calc(100vw - 32px));
 }
@@ -65,6 +97,10 @@
 @media (max-width: 680px) {
   .sidebar-add-link {
     margin-bottom: 10px;
+  }
+
+  .whisper-indicator {
+    min-height: 32px;
   }
 
   .transcript-card {
