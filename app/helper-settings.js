@@ -10,7 +10,7 @@ const helperHeading = Array.from(document.querySelectorAll('strong'))
 
 const badge = document.createElement('span');
 badge.id = 'helper-live-badge';
-badge.textContent = 'Checking…';
+badge.textContent = 'Not checked';
 badge.title = 'Live connection status between this CC page and CC Browser Helper';
 badge.style.cssText = [
   'display:inline-flex',
@@ -99,6 +99,6 @@ window.addEventListener('message', (event) => {
   setBadge(`Connected v${message.version || '?'}`, 'success');
 });
 
-window.setTimeout(() => {
-  runCheck().catch(() => {});
-}, 150);
+// Do not ping the extension during the initial Sources-page load. The helper
+// is checked when Settings opens or when the user presses Check helper. This
+// keeps the title page free of unnecessary background network/activity waits.
