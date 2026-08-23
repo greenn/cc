@@ -1,4 +1,11 @@
 (() => {
+  if (window.__CC_HELPER_BRIDGE_INSTALLED__) return;
+  window.__CC_HELPER_BRIDGE_INSTALLED__ = true;
+
+  chrome.runtime.sendMessage({ type: 'CC_HELPER_BRIDGE_READY' }, () => {
+    void chrome.runtime.lastError;
+  });
+
   window.postMessage({ source: 'cc-helper', type: 'CC_HELPER_READY', version: chrome.runtime.getManifest().version }, '*');
 
   window.addEventListener('message', (event) => {
