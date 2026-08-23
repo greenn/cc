@@ -49,7 +49,11 @@ export const instagramAdapter = {
       loadedCount: 0,
       nextCursor: 'helper',
       hasMore: true,
-      integrationStatus: 'helper',
+      // Add link must never switch the user away from CC. The app performs an
+      // initial getComments call after adding every source, so the first helper
+      // call is intentionally a no-op. An explicit Refresh then starts the
+      // browser helper and opens/focuses Instagram only when the user asks for it.
+      integrationStatus: 'helper-pending',
       lastVisibleCommentId: null,
       lastOpenedAt: null,
       addedAt: new Date().toISOString(),
@@ -58,6 +62,15 @@ export const instagramAdapter = {
   },
 
   async getComments(source) {
+    if (source.integrationStatus === 'helper-pending') {
+      return {
+        comments: [],
+        nextCursor: null,
+        hasMore: false,
+        totalResults: null,
+      };
+    }
+
     const result = await helperRequest('instagram.collect', {
       url: source.url,
       sourceId: source.id,
