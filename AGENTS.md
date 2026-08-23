@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.4`.
+Current baseline version: `0.4.5`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.4`;
-- another change on the same day: `0.4.5`;
+- current version: `0.4.5`;
+- another change on the same day: `0.4.6`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -29,8 +29,9 @@ For every version bump:
 1. Update `VERSION.json`:
    - `version` to the new version;
    - `lastChangeDate` to the local date of that change in `YYYY-MM-DD` form.
-2. The visible version in the brand area is synchronized at runtime from `VERSION.json` by the application navigation helper. Do not create an independent second source of truth for the displayed version.
-3. Keep extension/helper versions independent from the CC application version.
+2. Update the visible version in `app/index.html` to the same version. Do not rely only on JavaScript to replace a stale fallback version.
+3. Update the `?v=<version>` cache-busting token on the app CSS and top-level module script references in `app/index.html`. This is required so GitHub Pages/browser caches do not keep an older UI after a deployment.
+4. Keep extension/helper versions independent from the CC application version.
 
 Do not use the Chrome helper extension version as the CC application version. `helper/chrome/manifest.json` has its own independent extension version.
 
