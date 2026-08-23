@@ -66,6 +66,13 @@ function formatAge(seconds) {
   return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
 }
 
+function progressValue(source) {
+  const raw = source?.transcriptJobProgress;
+  const present = raw !== null && raw !== undefined && raw !== '';
+  const number = Number(raw);
+  return present && Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : null;
+}
+
 function isJobActive(source) {
   return Boolean(source && ACTIVE_STATUSES.has(source.transcriptJobStatus));
 }
@@ -108,9 +115,8 @@ function setError(message = '') {
 function renderJobState(source) {
   const active = isJobActive(source);
   const failed = source?.transcriptJobStatus === 'error';
-  const progress = Number(source?.transcriptJobProgress);
-  const hasProgress = Number.isFinite(progress);
-  const percent = hasProgress ? Math.max(0, Math.min(100, progress)) : 0;
+  const progress = progressValue(source);
+  const hasProgress = progress != null;
   const heartbeatAge = ageSeconds(source?.transcriptJobHeartbeatAt);
   const progressAge = ageSeconds(source?.transcriptJobLastProgressAt);
   const heartbeatMissing = active && source?.transcriptJobStatus === 'running' && heartbeatAge != null && heartbeatAge > 20;
@@ -125,8 +131,8 @@ function renderJobState(source) {
 
   if (active || failed) {
     progressLabel.textContent = failed ? 'Recognition failed' : phaseName(source);
-    progressPercent.textContent = hasProgress ? `${Math.round(percent)}%` : '—';
-    progressFill.style.width = `${hasProgress ? percent : 0}%`;
+    progressPercent.textContent = hasProgress ? `${Math.round(progress)}%` : '—';
+    progressFill.style.width = `${hasProgress ? progress : 0}%`;
 
     let note = source?.transcriptJobMessage || 'Recognition continues if this window is minimized.';
     if (heartbeatMissing) {
@@ -143,7 +149,7 @@ function renderJobState(source) {
   }
 
   if (failed) setError(source?.transcriptJobError || source?.transcriptJobMessage || 'Recognition failed.');
-  else if (active) setError('');
+  else setError('');
 
   if (active) {
     meta.textContent = source?.transcriptJobMessage || phaseName(source);
@@ -181,8 +187,8 @@ function syncButton() {
   if (!isYouTube) return;
 
   const active = isJobActive(source);
-  const progress = Number(source?.transcriptJobProgress);
-  const hasProgress = Number.isFinite(progress);
+  const progress = progressValue(source);
+  const hasProgress = progress != null;
   const failed = source?.transcriptJobStatus === 'error';
 
   if (active) {
