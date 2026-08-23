@@ -33,7 +33,7 @@ function normalizeComment(comment) {
   return {
     ...comment,
     avatarUrl: url,
-    // app.js must render initials first. The real image is attached only when
+    // app.js renders initials first. The real image is attached only when
     // the avatar is close to the viewport by this module.
     authorAvatar: '',
   };
@@ -246,10 +246,12 @@ function installObservers() {
   });
   mutationObserver.observe(commentsList, { childList: true, subtree: true });
 
-  const rightPanel = $('#detail-avatar')?.parentElement;
-  if (rightPanel) {
+  // Watch only the selected-author label. Watching the whole right header would
+  // also observe the avatar image we insert and create a self-triggering loop.
+  const selectedAuthor = $('#detail-author');
+  if (selectedAuthor) {
     rightPanelObserver = new MutationObserver(() => queueMicrotask(loadSelectedRightAvatar));
-    rightPanelObserver.observe(rightPanel, { childList: true, subtree: true, characterData: true });
+    rightPanelObserver.observe(selectedAuthor, { childList: true, characterData: true, subtree: true });
   }
 
   document.addEventListener('click', (event) => {
