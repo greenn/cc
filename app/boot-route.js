@@ -21,16 +21,16 @@ store.getSources = (...args) => {
   store.getSources = originalGetSources;
 
   if (!requestedSourceId) {
-    console.info('[CC 0.4.6] boot route: global view; skipped initial comment render');
+    console.info('[CC 0.4.7] boot route: global view; skipped initial comment render');
     return [];
   }
 
   const requested = sources.find((source) => source.id === requestedSourceId);
   if (!requested) {
-    console.warn('[CC 0.4.6] boot route: requested source not found; starting at Sources', requestedSourceId);
+    console.warn('[CC 0.4.7] boot route: requested source not found; starting at Sources', requestedSourceId);
     return [];
   }
 
-  console.info('[CC 0.4.6] boot route: opening requested source directly', requestedSourceId);
+  console.info('[CC 0.4.7] boot route: opening requested source directly', requestedSourceId);
   return [requested, ...sources.filter((source) => source.id !== requestedSourceId)];
 };
