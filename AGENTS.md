@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.6`.
+Current baseline version: `0.4.7`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.6`;
-- another change on the same day: `0.4.7`;
+- current version: `0.4.7`;
+- another change on the same day: `0.4.8`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -44,6 +44,15 @@ These are default product conventions for applications we build:
 - Prefer explicit URL state such as `view`, `source`, `filter`, and selected item identifiers rather than invisible navigation-only state.
 - Archive is a separate source view; archived sources should not clutter the normal Sources list.
 - On initial load, do not render an arbitrary first source before applying the URL route. The Home/Sources route must boot directly into the lightweight source overview without creating comment cards or starting avatar/network requests for a source the user did not open.
+
+## Avatar loading policy
+
+- Do not start avatar requests on Sources/Home.
+- Comment cards render initials first; external avatar URLs are loaded only near the visible comment viewport.
+- Limit avatar network work to a small concurrent queue (currently 5 requests).
+- Avatar requests must time out (currently 5 seconds) and fall back to initials without blocking the app.
+- Reuse the original avatar URL so normal browser HTTP/image caching can keep successful avatars temporarily.
+- Do not create a permanent backend avatar mirror unless the user explicitly decides it is needed later.
 
 ## UI reference
 
