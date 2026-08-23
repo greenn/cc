@@ -16,6 +16,45 @@
   cursor: help;
 }
 
+/* Comment emphasis and compact original-link placement. */
+.comment-head-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.comment-original {
+  padding: 0;
+  color: #666;
+  cursor: pointer;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.comment-original:hover {
+  color: var(--accent);
+}
+
+.comment-card.is-highlighted {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(255, 214, 64, 0.20), rgba(255, 214, 64, 0.05) 78%, transparent);
+  box-shadow: inset 3px 0 0 #d5a900;
+}
+
+.comment-card.is-highlighted.is-selected {
+  outline: 1px solid rgba(47, 25, 215, 0.18);
+  outline-offset: -1px;
+}
+
+@media (max-width: 680px) {
+  .comment-head-meta {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .top-tabs:has(.top-tab:disabled),
   .right-panel:has(#note-textarea:disabled) {
