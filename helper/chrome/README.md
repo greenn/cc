@@ -23,6 +23,17 @@ helper/chrome/
 
 The status should report the helper version and the `instagram` capability.
 
+The browser toolbar badge shows that the extension is alive:
+
+```text
+ON = helper extension is running
+CC = helper bridge is connected to the current CC tab
+```
+
+CC Settings also shows a live `Connected v…` / `Not connected` badge next to **CC Browser Helper**.
+
+If the helper was installed or updated while CC was already open, reload the extension on `chrome://extensions/` and refresh the CC tab. Version 0.2+ also attempts to inject the bridge into already-open CC tabs automatically when the extension is reloaded.
+
 ## Instagram flow
 
 When CC needs Instagram comments:
