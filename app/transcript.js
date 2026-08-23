@@ -1,4 +1,5 @@
 import { store } from './store.js';
+import { checkLocalWhisper, transcribeWithLocalWhisper } from './whisper-settings.js';
 
 const DEFAULT_BACKEND_URL = 'https://backend83.nadube.ru/cc';
 const $ = (selector) => document.querySelector(selector);
@@ -39,9 +40,13 @@ function formatTime(seconds) {
 function renderTranscript(source) {
   title.textContent = source?.title || 'YouTube transcript';
   const segments = Array.isArray(source?.transcriptSegments) ? source.transcriptSegments : [];
-  const method = source?.transcriptMethod === 'whisper' ? 'Whisper' : source?.transcriptMethod === 'captions' ? 'YouTube captions' : 'Transcript';
+  const method = source?.transcriptMethod === 'whisper'
+    ? 'Local Whisper'
+    : source?.transcriptMethod === 'captions'
+      ? 'YouTube captions'
+      : 'Transcript';
   const language = source?.transcriptLanguage ? ` · ${source.transcriptLanguage}` : '';
-  const generated = source?.transcriptGenerated ? ' · auto-generated captions' : '';
+  const generated = source?.transcriptGenerated && source?.transcriptMethod === 'captions' ? ' · auto-generated captions' : '';
   meta.textContent = `${method}${language}${generated}${segments.length ? ` · ${segments.length} segments` : ''}`;
 
   if (segments.length) {
@@ -78,6 +83,35 @@ async function readJson(response) {
   }
 }
 
+function saveTranscript(source, data) {
+  store.updateSource(source.id, {
+    transcript: data.text || '',
+    transcriptSegments: Array.isArray(data.segments) ? data.segments : [],
+    transcriptMethod: data.method || 'captions',
+    transcriptLanguage: data.language || '',
+    transcriptGenerated: Boolean(data.generated),
+    transcriptUpdatedAt: new Date().toISOString(),
+  });
+  renderTranscript(store.getSource(source.id));
+}
+
+async function localWhisperFallback(source, preferredLanguage = 'ru') {
+  meta.textContent = 'No usable YouTube captions. Checking local Whisper…';
+  const status = await checkLocalWhisper({ quiet: true });
+  if (!status.online) {
+    throw new Error('This video has no usable YouTube captions and local Whisper is offline. Start start-whisper.cmd on this computer.');
+  }
+
+  meta.textContent = `Local Whisper is recognizing the audio · ${status.model || 'model'} · ${status.device || 'device'}…`;
+  const local = await transcribeWithLocalWhisper(source.url, preferredLanguage);
+  return {
+    ...local,
+    ok: true,
+    method: 'whisper',
+    generated: true,
+  };
+}
+
 async function recognize(source) {
   if (!source || source.platform !== 'youtube' || running) return;
 
@@ -108,20 +142,21 @@ async function recognize(source) {
         preferredLanguages: ['ru', 'en'],
       }),
     });
-    const data = await readJson(response);
+    let data = await readJson(response);
+
     if (!response.ok || !data.ok) {
-      throw new Error(data.error || `Transcript request failed (${response.status}).`);
+      const noCaptions = data.code === 'whisper_not_configured'
+        || String(data.error || '').includes('no YouTube captions')
+        || String(data.error || '').includes('empty or unsupported caption track');
+
+      if (!noCaptions) {
+        throw new Error(data.error || `Transcript request failed (${response.status}).`);
+      }
+
+      data = await localWhisperFallback(source, 'ru');
     }
 
-    store.updateSource(source.id, {
-      transcript: data.text || '',
-      transcriptSegments: Array.isArray(data.segments) ? data.segments : [],
-      transcriptMethod: data.method || 'captions',
-      transcriptLanguage: data.language || '',
-      transcriptGenerated: Boolean(data.generated),
-      transcriptUpdatedAt: new Date().toISOString(),
-    });
-    renderTranscript(store.getSource(source.id));
+    saveTranscript(source, data);
   } finally {
     running = false;
     runButton.disabled = false;
