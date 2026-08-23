@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.3.5`.
+Current baseline version: `0.3.7`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.3.5`;
-- another change on the same day: `0.3.6`;
+- current version: `0.3.7`;
+- another change on the same day: `0.3.8`;
 - the first change on the next active development day: `0.4.1`;
 - the next change that same new day: `0.4.2`.
 
