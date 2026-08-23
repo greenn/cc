@@ -34,13 +34,8 @@ function numberCommentCards() {
     }
 
     const number = indexMaps.get(sourceId).get(commentId);
-    if (number) {
-      card.dataset.internalNumber = `#${number}`;
-      card.setAttribute('aria-label', `CC comment ${number}`);
-    } else {
-      delete card.dataset.internalNumber;
-      card.removeAttribute('aria-label');
-    }
+    if (number) card.dataset.internalNumber = `#${number}`;
+    else delete card.dataset.internalNumber;
   });
 }
 
@@ -103,17 +98,22 @@ function restoreReadingPosition(sourceId = activeSourceId()) {
   restoring = true;
   requestAnimationFrame(() => requestAnimationFrame(() => {
     const anchorId = source.lastVisibleCommentId;
+    const hasPreciseOffset = source.lastVisibleOffset !== undefined && source.lastVisibleOffset !== null;
     const desiredOffset = Number(source.lastVisibleOffset);
     const anchor = anchorId
       ? [...contentArea.querySelectorAll('.comment-card')].find((card) => card.dataset.commentId === anchorId && card.dataset.sourceId === sourceId)
       : null;
 
-    if (anchor && Number.isFinite(desiredOffset)) {
+    if (anchor && hasPreciseOffset && Number.isFinite(desiredOffset)) {
       const rootRect = contentArea.getBoundingClientRect();
       const currentOffset = anchor.getBoundingClientRect().top - rootRect.top;
       contentArea.scrollTop += currentOffset - desiredOffset;
-    } else if (!anchor && Number.isFinite(Number(source.lastScrollTop))) {
+    } else if (source.lastScrollTop !== undefined && source.lastScrollTop !== null && Number.isFinite(Number(source.lastScrollTop))) {
       contentArea.scrollTop = Number(source.lastScrollTop);
+    } else {
+      // Older CC versions stored the last comment marked read, not the real scroll position.
+      // Do not restore that stale midpoint on the first reload after this fix.
+      contentArea.scrollTop = 0;
     }
 
     restoring = false;
@@ -128,17 +128,21 @@ document.addEventListener('visibilitychange', () => {
 
 document.addEventListener('click', (event) => {
   const sourceButton = event.target.closest?.('.source-item');
-  if (!sourceButton?.dataset.sourceId) return;
-  setTimeout(() => restoreReadingPosition(sourceButton.dataset.sourceId), 0);
+  if (sourceButton?.dataset.sourceId) {
+    setTimeout(() => restoreReadingPosition(sourceButton.dataset.sourceId), 0);
+    return;
+  }
+
+  if (event.target.closest?.('.comment-card')) {
+    setTimeout(saveReadingPosition, 0);
+  }
 });
 
 if (commentsList) {
   new MutationObserver(scheduleNumbering).observe(commentsList, { childList: true, subtree: true });
 }
 if (sourcesList) {
-  new MutationObserver(() => {
-    scheduleNumbering();
-  }).observe(sourcesList, { childList: true, subtree: true });
+  new MutationObserver(scheduleNumbering).observe(sourcesList, { childList: true, subtree: true });
 }
 
 scheduleNumbering();
