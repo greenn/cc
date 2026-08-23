@@ -4,12 +4,41 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 from faster_whisper import WhisperModel
 from yt_dlp import YoutubeDL
 
-app = FastAPI(title="CC Whisper service", version="0.1.0")
+app = FastAPI(title="CC Whisper service", version="0.2.0")
+
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://greenn.github.io",
+    "https://backend83.nadube.ru",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+allowed_origins = [
+    value.strip()
+    for value in os.getenv("CC_WHISPER_ALLOWED_ORIGINS", ",".join(DEFAULT_ALLOWED_ORIGINS)).split(",")
+    if value.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+)
+
+
+@app.middleware("http")
+async def local_network_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.headers.get("access-control-request-private-network", "").lower() == "true":
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
 
 
 class TranscribeRequest(BaseModel):
@@ -66,6 +95,7 @@ def health() -> dict:
         "ok": True,
         "model": os.getenv("CC_WHISPER_MODEL", "small"),
         "device": os.getenv("CC_WHISPER_DEVICE", "cpu"),
+        "computeType": os.getenv("CC_WHISPER_COMPUTE_TYPE", "int8"),
     }
 
 
