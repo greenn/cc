@@ -2,6 +2,7 @@ import { store } from './store.js';
 
 const DEFAULT_BACKEND_URL = 'https://backend83.nadube.ru/cc';
 const LEGACY_MARKER = 'server-managed';
+const REQUEST_TIMEOUT_MS = 8000;
 const $ = (selector) => document.querySelector(selector);
 
 const settingsButton = $('#settings-button');
@@ -47,6 +48,16 @@ async function readJson(response) {
   try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; }
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function checkVkStatus({ quiet = false } = {}) {
   const { base, token, profile } = currentBackend();
   if (!token) {
@@ -57,7 +68,7 @@ async function checkVkStatus({ quiet = false } = {}) {
 
   if (!quiet) show('Checking VK connection…');
   try {
-    const response = await fetch(`${base}/api/vk-status.php?profile=${encodeURIComponent(profile)}`, {
+    const response = await fetchWithTimeout(`${base}/api/vk-status.php?profile=${encodeURIComponent(profile)}`, {
       method: 'GET',
       headers: {
         Accept: 'application/json',
@@ -78,6 +89,10 @@ async function checkVkStatus({ quiet = false } = {}) {
     }
     return data;
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      if (!quiet) show('VK check timed out. The backend did not answer within 8 seconds.', 'error');
+      return null;
+    }
     syncLegacyMarker(false);
     if (!quiet) show(`VK check failed: ${error.message || error}`, 'error');
     return null;
@@ -123,7 +138,7 @@ async function connectVk(event) {
   show('Creating a protected VK connection link…');
 
   try {
-    const response = await fetch(`${base}/api/vk-connect.php`, {
+    const response = await fetchWithTimeout(`${base}/api/vk-connect.php`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -143,7 +158,10 @@ async function connectVk(event) {
     show('VK authorization opened in a new tab. Finish it there; CC will detect the connection automatically.');
     startPolling();
   } catch (error) {
-    show(`VK connection failed: ${error.message || error}`, 'error');
+    const message = error?.name === 'AbortError'
+      ? 'The backend did not answer within 8 seconds.'
+      : (error.message || error);
+    show(`VK connection failed: ${message}`, 'error');
   } finally {
     connectButton.disabled = false;
     connectButton.textContent = 'Connect VK';
@@ -165,4 +183,6 @@ if (String(store.getSettings().vkAccessToken || '').startsWith('vk')) {
   store.setSettings({ vkAccessToken: '' });
 }
 
-setTimeout(() => checkVkStatus({ quiet: true }), 400);
+// Do not contact backend83 during the initial title/Sources-page load. VK
+// status is checked when Settings opens, when the user presses Check VK, or
+// while an explicit VK authorization flow is running.
