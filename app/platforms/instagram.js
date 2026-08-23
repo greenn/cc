@@ -79,7 +79,13 @@ export const instagramAdapter = {
 
     const comments = Array.isArray(result?.comments) ? result.comments : [];
     if (!comments.length) {
-      throw new Error('Instagram helper connected, but no comments were recognized. Open the post while logged in and try Refresh; Instagram markup may also have changed.');
+      const diagnostic = result?.diagnostics || {};
+      const details = [
+        Number.isFinite(Number(diagnostic.commentCandidates)) ? `candidates ${diagnostic.commentCandidates}` : '',
+        Number.isFinite(Number(diagnostic.permalinkAnchors)) ? `permalinks ${diagnostic.permalinkAnchors}` : '',
+        Number.isFinite(Number(diagnostic.timestamps)) ? `timestamps ${diagnostic.timestamps}` : '',
+      ].filter(Boolean).join(' · ');
+      throw new Error(`Instagram helper found no comments${details ? ` (${details})` : ''}. Make sure comments are visible on the opened post/reel and that CC Browser Helper is reloaded to the latest version.`);
     }
 
     return {
