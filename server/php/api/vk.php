@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/lib/bootstrap.php';
+require_once dirname(__DIR__) . '/lib/vk-oauth.php';
 
 cc_require_auth();
 
@@ -13,93 +14,59 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
 
 $body = cc_read_json_body();
 $method = trim((string)($body['method'] ?? ''));
-$accessToken = trim((string)($body['accessToken'] ?? ''));
 $params = $body['params'] ?? [];
+$profile = (string)($body['profile'] ?? cc_config()['default_profile'] ?? 'default');
 
 $allowedMethods = ['video.get', 'video.getComments'];
 if (!in_array($method, $allowedMethods, true)) {
     cc_error('VK method is not allowed by this proxy.', 403);
 }
 
-if ($accessToken === '') {
-    cc_error('VK user access token is required.', 422);
-}
-
 if (!is_array($params)) {
     cc_error('params must be a JSON object.', 422);
 }
 
-$params['access_token'] = $accessToken;
-$params['v'] = '5.199';
-$postBody = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
-$url = 'https://api.vk.com/method/' . rawurlencode($method);
-
 try {
-    $raw = null;
-    $status = 0;
+    $profile = cc_vk_profile_name($profile);
+    $accessToken = cc_vk_refresh_access_token($profile);
+    $params['access_token'] = $accessToken;
+    $params['v'] = '5.199';
 
-    if (function_exists('curl_init')) {
-        $curl = curl_init($url);
-        if ($curl === false) {
-            throw new RuntimeException('Could not initialize cURL.');
-        }
+    [$status, $raw] = cc_vk_http_post(
+        'https://api.vk.ru/method/' . rawurlencode($method),
+        $params
+    );
 
-        curl_setopt_array($curl, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $postBody,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/x-www-form-urlencoded',
-                'Accept: application/json',
-            ],
-        ]);
-
-        $result = curl_exec($curl);
-        if ($result === false) {
-            $error = curl_error($curl);
-            curl_close($curl);
-            throw new RuntimeException('VK request failed: ' . $error);
-        }
-
-        $status = (int)curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-        curl_close($curl);
-        $raw = $result;
-    } elseif (filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN)) {
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'POST',
-                'header' => "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json\r\n",
-                'content' => $postBody,
-                'timeout' => 30,
-                'ignore_errors' => true,
-            ],
-        ]);
-        $result = file_get_contents($url, false, $context);
-        if ($result === false) {
-            throw new RuntimeException('VK request failed through PHP stream transport.');
-        }
-        $raw = $result;
-        $status = 200;
-        if (isset($http_response_header) && is_array($http_response_header)) {
-            foreach ($http_response_header as $line) {
-                if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $line, $match)) {
-                    $status = (int)$match[1];
-                    break;
-                }
-            }
-        }
-    } else {
-        throw new RuntimeException('Hosting needs either PHP cURL or allow_url_fopen for VK proxy requests.');
-    }
-
-    $data = json_decode((string)$raw, true, 512, JSON_THROW_ON_ERROR);
+    $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
     if ($status >= 400) {
         cc_error('VK HTTP request failed.', 502, ['vkStatus' => $status]);
     }
+
     if (isset($data['error'])) {
         $vkError = $data['error'];
+        $errorCode = (int)($vkError['error_code'] ?? 0);
+
+        // If VK invalidates the access token slightly before our local expiry,
+        // refresh once immediately and retry the read request.
+        if (in_array($errorCode, [5, 27, 28], true)) {
+            $accessToken = cc_vk_refresh_access_token($profile, true);
+            $params['access_token'] = $accessToken;
+            [$retryStatus, $retryRaw] = cc_vk_http_post(
+                'https://api.vk.ru/method/' . rawurlencode($method),
+                $params
+            );
+            $retryData = json_decode($retryRaw, true, 512, JSON_THROW_ON_ERROR);
+            if ($retryStatus < 400 && !isset($retryData['error'])) {
+                cc_json([
+                    'ok' => true,
+                    'response' => $retryData['response'] ?? null,
+                ]);
+            }
+            if (isset($retryData['error'])) {
+                $vkError = $retryData['error'];
+            }
+        }
+
         cc_error('VK API: ' . (string)($vkError['error_msg'] ?? 'Unknown VK API error'), 502, [
             'vkErrorCode' => $vkError['error_code'] ?? null,
         ]);
