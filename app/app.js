@@ -227,20 +227,26 @@ function renderComments() {
 
   ui.commentsList.innerHTML = comments.map((comment) => {
     const sourceForComment = store.getSource(comment.sourceId);
-    const status = [comment.read ? 'read' : 'unread', comment.saved ? 'saved' : '', comment.deleted ? 'deleted' : ''].filter(Boolean).join(' · ');
+    const status = [comment.read ? 'read' : 'unread', comment.saved ? 'saved' : '', comment.highlighted ? 'highlighted' : '', comment.deleted ? 'deleted' : ''].filter(Boolean).join(' · ');
     const pageBadge = comment.forumPage ? `<span>p.${comment.forumPage}</span>` : '';
     return `
-      <article class="comment-card ${selectedCommentId === comment.id ? 'is-selected' : ''} ${comment.read ? 'is-read' : ''}" data-comment-id="${escapeHtml(comment.id)}" data-source-id="${escapeHtml(comment.sourceId)}">
+      <article class="comment-card ${selectedCommentId === comment.id ? 'is-selected' : ''} ${comment.read ? 'is-read' : ''} ${comment.highlighted ? 'is-highlighted' : ''}" data-comment-id="${escapeHtml(comment.id)}" data-source-id="${escapeHtml(comment.sourceId)}">
         <div class="comment-avatar">${comment.authorAvatar ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" loading="lazy" />` : escapeHtml((comment.authorName || '?').slice(0, 2).toUpperCase())}</div>
         <div class="comment-body">
-          <div class="comment-head"><div><strong>${escapeHtml(comment.authorName)}</strong><span>${escapeHtml(comment.authorUsername || sourceForComment?.platform || '')}</span></div><time>${formatDate(comment.publishedAt)}</time></div>
+          <div class="comment-head">
+            <div><strong>${escapeHtml(comment.authorName)}</strong><span>${escapeHtml(comment.authorUsername || sourceForComment?.platform || '')}</span></div>
+            <div class="comment-head-meta">
+              <time>${formatDate(comment.publishedAt)}</time>
+              ${comment.originalUrl ? '<button class="comment-original" data-action="open" title="Open original">↗ Original</button>' : ''}
+            </div>
+          </div>
           <p class="comment-text">${escapeHtml(comment.text).replaceAll('\n', '<br>')}</p>
           <div class="comment-footer">
             <div class="comment-stats"><span>♥ ${shortNumber(comment.likeCount)}</span><span>↩ ${shortNumber(comment.replyCount)}</span>${pageBadge}<span class="comment-status">${escapeHtml(status)}</span></div>
             <div class="comment-actions">
               <button data-action="save" title="Save">${comment.saved ? '★ Saved' : '☆ Save'}</button>
               ${comment.deleted ? '<button data-action="restore">↶ Restore</button>' : '<button data-action="delete">× Delete</button>'}
-              ${comment.originalUrl ? '<button data-action="open">↗ Original</button>' : ''}
+              <button data-action="highlight" title="Save and highlight">${comment.highlighted ? '✦ Highlighted' : '✧ Highlight'}</button>
             </div>
           </div>
         </div>
@@ -277,7 +283,7 @@ function renderRightPanel() {
   $('#detail-avatar').innerHTML = comment?.authorAvatar ? `<img src="${escapeHtml(comment.authorAvatar)}" alt="" />` : escapeHtml((comment?.authorName || 'CC').slice(0, 2).toUpperCase());
   $('#detail-author').textContent = comment?.authorName || 'Selection';
   $('#detail-username').textContent = comment?.authorUsername || 'Comment details';
-  $('#detail-status').textContent = comment ? [comment.read ? 'Read' : 'Unread', comment.saved ? 'Saved' : '', comment.deleted ? 'Deleted' : ''].filter(Boolean).join(' · ') : '—';
+  $('#detail-status').textContent = comment ? [comment.read ? 'Read' : 'Unread', comment.saved ? 'Saved' : '', comment.highlighted ? 'Highlighted' : '', comment.deleted ? 'Deleted' : ''].filter(Boolean).join(' · ') : '—';
   $('#detail-source').textContent = source?.title || '—';
   $('#detail-author-name').textContent = comment?.authorName || '—';
   $('#detail-date').textContent = comment ? formatDate(comment.publishedAt) : '—';
@@ -327,7 +333,27 @@ function setGlobalView(view) {
 function handleCommentAction(sourceId, commentId, action) {
   const comment = store.getComment(sourceId, commentId);
   if (!comment) return;
-  if (action === 'save') store.updateComment(sourceId, commentId, { saved: !comment.saved, savedAt: !comment.saved ? new Date().toISOString() : null });
+
+  if (action === 'save') {
+    const nextSaved = !comment.saved;
+    store.updateComment(sourceId, commentId, {
+      saved: nextSaved,
+      savedAt: nextSaved ? new Date().toISOString() : null,
+      ...(nextSaved ? {} : { highlighted: false, highlightedAt: null }),
+    });
+  }
+
+  if (action === 'highlight') {
+    const nextHighlighted = !comment.highlighted;
+    const now = new Date().toISOString();
+    store.updateComment(sourceId, commentId, {
+      highlighted: nextHighlighted,
+      highlightedAt: nextHighlighted ? now : null,
+      saved: nextHighlighted ? true : comment.saved,
+      savedAt: nextHighlighted && !comment.saved ? now : comment.savedAt,
+    });
+  }
+
   if (action === 'delete') store.updateComment(sourceId, commentId, { deleted: true, deletedAt: new Date().toISOString() });
   if (action === 'restore') store.updateComment(sourceId, commentId, { deleted: false, deletedAt: null });
   if (action === 'open' && comment.originalUrl) window.open(comment.originalUrl, '_blank', 'noopener,noreferrer');
@@ -384,7 +410,7 @@ async function loadMoreComments(sourceId, { refresh = false } = {}) {
     if (page.totalPages != null) patch.totalPages = page.totalPages;
     store.updateSource(source.id, patch);
     render();
-    if (refresh) showStatus('Source refreshed. Local read/saved/deleted states were preserved.');
+    if (refresh) showStatus('Source refreshed. Local read/saved/highlighted/deleted states were preserved.');
   } catch (error) {
     showStatus(error.message || 'Could not load comments.', 'error');
   } finally {
@@ -460,7 +486,7 @@ $$('#top-tabs .top-tab').forEach((button) => button.addEventListener('click', ()
 
 ['#add-link-button', '#left-add-link', '#empty-add-link'].forEach((selector) => $(selector)?.addEventListener('click', openAddDialog));
 $('#settings-button').addEventListener('click', openSettings);
-$('#help-button').addEventListener('click', () => showStatus('YouTube uses YouTube Data API. VK uses video.getComments with your user token. Instagram uses CC Browser Helper with your signed-in browser session. Forums use per-site adapters. Passing the center line marks comments read. J/K navigate, S saves, D deletes, O opens original.'));
+$('#help-button').addEventListener('click', () => showStatus('YouTube uses YouTube Data API. VK uses video.getComments with your user token. Instagram uses CC Browser Helper with your signed-in browser session. Forums use per-site adapters. Passing the center line marks comments read. J/K navigate, S saves, H highlights, D deletes, O opens original.'));
 ui.refresh.addEventListener('click', () => currentSourceId && loadMoreComments(currentSourceId, { refresh: true }));
 ui.search.addEventListener('input', renderComments);
 ui.sort.addEventListener('change', renderComments);
@@ -531,6 +557,7 @@ window.addEventListener('keydown', (event) => {
   const found = selectedCommentId ? store.findComment(selectedCommentId) : null;
   if (!found) return;
   if (key === 's') { event.preventDefault(); handleCommentAction(found.sourceId, selectedCommentId, 'save'); }
+  if (key === 'h') { event.preventDefault(); handleCommentAction(found.sourceId, selectedCommentId, 'highlight'); }
   if (key === 'd') { event.preventDefault(); handleCommentAction(found.sourceId, selectedCommentId, 'delete'); }
   if (key === 'o' && found.comment.originalUrl) {
     event.preventDefault();
