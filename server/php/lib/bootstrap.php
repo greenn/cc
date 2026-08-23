@@ -199,10 +199,12 @@ function cc_read_json_body(): array
 function cc_sanitize_state(array $state): array
 {
     if (isset($state['settings']) && is_array($state['settings'])) {
-        // API keys and backend credentials stay local to the browser/server config.
+        // API keys and backend/VK credentials stay outside synchronized state.
         unset($state['settings']['youtubeApiKey']);
         unset($state['settings']['serverApiToken']);
         unset($state['settings']['apiToken']);
+        unset($state['settings']['backendToken']);
+        unset($state['settings']['vkAccessToken']);
     }
 
     return $state;
