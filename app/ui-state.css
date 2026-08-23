@@ -16,6 +16,17 @@
   cursor: help;
 }
 
+/* Brand/logo is always the application home link. */
+.brand-home {
+  cursor: pointer;
+  user-select: none;
+}
+
+.brand-home:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
 /* Stable CC-local number for each comment inside its source. */
 .comment-card {
   grid-template-columns: 34px 42px minmax(0, 1fr);
@@ -38,6 +49,35 @@
 .comment-card.is-selected::before,
 .comment-card.is-highlighted::before {
   color: var(--accent);
+}
+
+/* Source overview actions. */
+.source-overview-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-overview-actions .ghost-action {
+  min-height: 30px;
+  padding-inline: 10px;
+}
+
+.source-delete-action {
+  color: var(--danger);
+}
+
+.source-delete-action:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Allow the status text itself to be selected/copied. */
+#whisper-indicator,
+#whisper-indicator-text {
+  user-select: text;
 }
 
 /* Comment emphasis and compact original-link placement. */
@@ -86,6 +126,10 @@
     align-items: flex-end;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .source-overview-actions {
+    justify-content: flex-start;
   }
 }
 
