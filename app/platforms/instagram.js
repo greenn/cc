@@ -49,10 +49,9 @@ export const instagramAdapter = {
       loadedCount: 0,
       nextCursor: 'helper',
       hasMore: true,
-      // Add link must never switch the user away from CC. The app performs an
-      // initial getComments call after adding every source, so the first helper
-      // call is intentionally a no-op. An explicit Refresh then starts the
-      // browser helper and opens/focuses Instagram only when the user asks for it.
+      // Adding/opening an Instagram source must stay inside CC. Automatic loads
+      // are intentionally deferred; only an explicit Refresh asks the helper
+      // to visit Instagram and collect rendered comments.
       integrationStatus: 'helper-pending',
       lastVisibleCommentId: null,
       lastOpenedAt: null,
@@ -61,12 +60,16 @@ export const instagramAdapter = {
     };
   },
 
-  async getComments(source) {
-    if (source.integrationStatus === 'helper-pending') {
+  async getComments(source, cursor = source?.nextCursor) {
+    // app.js passes the stored cursor for automatic/add/open loads and null for
+    // an explicit Refresh. Keep the automatic path a true no-op while leaving
+    // hasMore=true, so clicking a source never launches Instagram and does not
+    // permanently turn a newly-added 0/0 source into a finished source.
+    if (cursor !== null) {
       return {
         comments: [],
-        nextCursor: null,
-        hasMore: false,
+        nextCursor: 'helper',
+        hasMore: true,
         totalResults: null,
       };
     }
@@ -85,7 +88,7 @@ export const instagramAdapter = {
         Number.isFinite(Number(diagnostic.permalinkAnchors)) ? `permalinks ${diagnostic.permalinkAnchors}` : '',
         Number.isFinite(Number(diagnostic.timestamps)) ? `timestamps ${diagnostic.timestamps}` : '',
       ].filter(Boolean).join(' · ');
-      throw new Error(`Instagram helper found no comments${details ? ` (${details})` : ''}. Make sure comments are visible on the opened post/reel and that CC Browser Helper is reloaded to the latest version.`);
+      throw new Error(`Instagram helper found no comments${details ? ` (${details})` : ''}. Make sure comments are visible on the post/reel and that CC Browser Helper is reloaded to the latest version.`);
     }
 
     return {
