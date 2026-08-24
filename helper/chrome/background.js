@@ -81,63 +81,85 @@ function sendTabMessage(tabId, message) {
   });
 }
 
-async function getInstagramTab(targetUrl) {
-  const target = new URL(targetUrl);
-  const marker = target.pathname.split('/').filter(Boolean).find((part) => part.length > 5) || target.pathname;
-  const tabs = await chrome.tabs.query({ url: ['https://www.instagram.com/*', 'https://instagram.com/*'] });
-  const existing = tabs.find((tab) => tab.url?.includes(marker));
-
-  if (existing?.id) {
-    // Never activate/focus Instagram merely because CC is collecting comments.
-    // Reuse an already-open matching post/reel in place.
-    if (existing.url !== targetUrl) {
-      await chrome.tabs.update(existing.id, { url: targetUrl });
-      await waitForTabComplete(existing.id);
-    } else if (existing.status !== 'complete') {
-      await waitForTabComplete(existing.id);
-    }
-    return { tabId: existing.id, created: false };
+async function restoreCallerFocus(caller) {
+  if (!caller?.tabId) return;
+  try {
+    await chrome.tabs.update(caller.tabId, { active: true });
+  } catch {
+    return;
   }
-
-  // A temporary inactive tab lets Instagram render with the user's existing
-  // signed-in session without stealing focus from CC. It is closed afterwards.
-  const tab = await chrome.tabs.create({ url: targetUrl, active: false });
-  if (!tab.id) throw new Error('Could not open Instagram background tab.');
-  await waitForTabComplete(tab.id);
-  return { tabId: tab.id, created: true };
+  if (caller.windowId) {
+    try {
+      await chrome.windows.update(caller.windowId, { focused: true });
+    } catch {
+      // The CC window may have been closed while collection was running.
+    }
+  }
 }
 
-async function collectInstagram(payload) {
+async function createInstagramWorkerTab(targetUrl, caller) {
+  const createProperties = {
+    url: targetUrl,
+    active: false,
+  };
+
+  if (caller?.windowId) createProperties.windowId = caller.windowId;
+  if (Number.isInteger(caller?.index)) createProperties.index = caller.index + 1;
+  if (caller?.tabId) createProperties.openerTabId = caller.tabId;
+
+  const tab = await chrome.tabs.create(createProperties);
+  if (!tab.id) throw new Error('Could not open Instagram background tab.');
+
+  // Chrome normally respects active:false, but re-assert the CC tab immediately
+  // and again after Instagram finishes loading. This also protects against a
+  // page/window attempting to steal focus while the helper is working.
+  await restoreCallerFocus(caller);
+  await waitForTabComplete(tab.id);
+  await restoreCallerFocus(caller);
+
+  return tab.id;
+}
+
+async function collectInstagram(payload, caller) {
   if (!payload?.url) throw new Error('Instagram URL is missing.');
-  const { tabId, created } = await getInstagramTab(payload.url);
+
+  // Never reuse or navigate a user's existing Instagram tab. A dedicated
+  // temporary inactive tab is much safer: Refresh cannot hijack another tab,
+  // and the worker tab is always closed when collection finishes.
+  const tabId = await createInstagramWorkerTab(payload.url, caller);
   await new Promise((resolve) => setTimeout(resolve, 1200));
+  await restoreCallerFocus(caller);
 
   try {
     try {
-      return await sendTabMessage(tabId, {
+      const result = await sendTabMessage(tabId, {
         type: 'CC_INSTAGRAM_COLLECT',
         url: payload.url,
         sourceId: payload.sourceId,
         maxClicks: payload.maxClicks || 40,
       });
+      await restoreCallerFocus(caller);
+      return result;
     } catch (error) {
       // The content script may not yet be ready immediately after navigation.
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      return await sendTabMessage(tabId, {
+      await restoreCallerFocus(caller);
+      const result = await sendTabMessage(tabId, {
         type: 'CC_INSTAGRAM_COLLECT',
         url: payload.url,
         sourceId: payload.sourceId,
         maxClicks: payload.maxClicks || 40,
       });
+      await restoreCallerFocus(caller);
+      return result;
     }
   } finally {
-    if (created) {
-      try {
-        await chrome.tabs.remove(tabId);
-      } catch {
-        // The user may have closed the temporary tab first.
-      }
+    try {
+      await chrome.tabs.remove(tabId);
+    } catch {
+      // The user may have closed the temporary tab first.
     }
+    await restoreCallerFocus(caller);
   }
 }
 
@@ -157,7 +179,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { version: chrome.runtime.getManifest().version, capabilities: ['instagram'] };
     }
     if (message.action === 'instagram.collect') {
-      return await collectInstagram(message.payload || {});
+      const caller = {
+        tabId: sender.tab?.id || null,
+        windowId: sender.tab?.windowId || null,
+        index: Number.isInteger(sender.tab?.index) ? sender.tab.index : null,
+      };
+      return await collectInstagram(message.payload || {}, caller);
     }
     throw new Error(`Unsupported helper action: ${message.action}`);
   })().then(
