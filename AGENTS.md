@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.13`.
+Current baseline version: `0.4.14`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.13`;
-- another change on the same day: `0.4.14`;
+- current version: `0.4.14`;
+- another change on the same day: `0.4.15`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -67,6 +67,14 @@ These are default product conventions for applications we build:
 - A helper-created temporary Instagram tab should be closed after the scrape completes.
 - Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
 - When a refresh returns zero candidates, zero permalinks, and zero timestamps, do not claim with certainty that the post was deleted. It may be deleted/unavailable or Instagram may not have exposed usable markup. Offer the user a confirmation to remove that source from CC.
+- Instagram media downloads are explicit user actions only. Save requested video/photos to the local Chrome Downloads folder under `CC/Instagram/...`; do not mirror media to the PHP backend by default.
+- Keep downloaded-media metadata in the CC source so the app can show downloaded items above Comments and reopen them through the Browser Helper.
+
+## Comment gestures
+
+- Horizontal gesture on a comment: drag/swipe right to Save, left to Delete.
+- Keep vertical scrolling natural and preserve mouse text selection inside comment text; mouse drag can start from the rest of the card.
+- A Save gesture must not toggle an already-saved comment back to unsaved.
 
 ## Avatar loading policy
 
