@@ -22,8 +22,7 @@ function writeRoute(values, { replace = false } = {}) {
     }
   });
 
-  const method = replace ? 'replaceState' : 'pushState';
-  history[method]({}, '', `${url.pathname}${url.search}${url.hash}`);
+  history[replace ? 'replaceState' : 'pushState']({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 function updateAuxState() {
@@ -54,6 +53,14 @@ function isArchived(sourceId) {
   return Boolean(sourceById(sourceId)?.archived);
 }
 
+function setText(node, value) {
+  if (node && node.textContent !== value) node.textContent = value;
+}
+
+function setHidden(node, value) {
+  if (node && node.hidden !== value) node.hidden = value;
+}
+
 function ensureArchiveNav() {
   const nav = $('#main-nav');
   const sourcesButton = nav?.querySelector('.nav-item[data-view="sources"]');
@@ -70,6 +77,7 @@ function ensureArchiveNav() {
 function configureBrandHome() {
   const brand = $('.brand');
   if (!brand || brand.dataset.homeBound === '1') return;
+
   brand.dataset.homeBound = '1';
   brand.classList.add('brand-home');
   brand.setAttribute('role', 'button');
@@ -99,10 +107,6 @@ function enableWhisperTextSelection() {
   const indicator = $('#whisper-indicator');
   if (!indicator || indicator.dataset.selectionBound === '1') return;
   indicator.dataset.selectionBound = '1';
-
-  // whisper-settings.js listens for document clicks to refresh the indicator.
-  // Stopping this harmless click from bubbling prevents a text-node rewrite
-  // immediately after selecting “Whisper”, so normal copy works.
   indicator.addEventListener('click', (event) => event.stopPropagation());
 }
 
@@ -112,9 +116,8 @@ function ensureOverviewActions(card) {
   if (!sourceId) return;
 
   card.dataset.sourceId = sourceId;
-  const archived = isArchived(sourceId);
-
   let actions = card.querySelector('.source-overview-actions');
+
   if (!actions) {
     actions = document.createElement('div');
     actions.className = 'source-overview-actions';
@@ -143,15 +146,15 @@ function ensureOverviewActions(card) {
   }
 
   const archiveButton = actions.querySelector('[data-source-action="archive"]');
-  if (archiveButton) archiveButton.textContent = archived ? 'Restore' : 'Archive';
+  setText(archiveButton, isArchived(sourceId) ? 'Restore' : 'Archive');
 }
 
 function ensureOverviewEmptyState(archiveView, visibleCount) {
   const empty = $('#empty-state');
   if (!empty) return;
 
-  const overviewVisible = routeMode() === 'sources' || routeMode() === 'archive';
-  if (!overviewVisible) return;
+  const mode = routeMode();
+  if (mode !== 'sources' && mode !== 'archive') return;
 
   let strong = empty.querySelector('strong');
   let text = empty.querySelector('p');
@@ -175,12 +178,12 @@ function ensureOverviewEmptyState(archiveView, visibleCount) {
     empty.appendChild(addButton);
   }
 
-  strong.textContent = archiveView ? 'Archive is empty' : 'No active sources';
-  text.textContent = archiveView
+  setText(strong, archiveView ? 'Archive is empty' : 'No active sources');
+  setText(text, archiveView
     ? 'Sources moved to the archive will appear here.'
-    : 'Add a YouTube, Instagram, VK, or supported forum link to start.';
-  addButton.hidden = archiveView;
-  empty.hidden = visibleCount > 0;
+    : 'Add a YouTube, Instagram, VK, or supported forum link to start.');
+  setHidden(addButton, archiveView);
+  setHidden(empty, visibleCount > 0);
 }
 
 function postprocess() {
@@ -195,31 +198,33 @@ function postprocess() {
 
   $$('.source-item').forEach((item) => {
     const archived = isArchived(item.dataset.sourceId);
-    item.hidden = archived && item.dataset.sourceId !== activeSourceId;
+    const shouldHide = archiveView
+      ? !archived
+      : archived && item.dataset.sourceId !== activeSourceId;
+    setHidden(item, shouldHide);
   });
 
   const cards = $$('.source-overview-card');
   let visibleCards = 0;
+
   cards.forEach((card) => {
     ensureOverviewActions(card);
     const sourceId = card.dataset.sourceId || card.querySelector('[data-open-source]')?.dataset.openSource;
     const archived = sourceId ? isArchived(sourceId) : false;
-    card.hidden = archiveView ? !archived : archived;
-    if (!card.hidden) visibleCards += 1;
+    const shouldHide = archiveView ? !archived : archived;
+    setHidden(card, shouldHide);
+    if (!shouldHide) visibleCards += 1;
   });
 
   const archiveButton = $('#archive-nav');
   const sourcesButton = $('#main-nav .nav-item[data-view="sources"]');
-  if (archiveButton) archiveButton.classList.toggle('is-active', archiveView);
-  if (sourcesButton && archiveView) sourcesButton.classList.remove('is-active');
+  archiveButton?.classList.toggle('is-active', archiveView);
+  if (sourcesButton) sourcesButton.classList.toggle('is-active', mode === 'sources');
 
   if (archiveView) {
-    const title = $('#content-title');
-    const eyebrow = $('#source-eyebrow');
-    const meta = $('#content-meta');
-    if (eyebrow) eyebrow.textContent = 'Comment Collection';
-    if (title) title.textContent = 'Archive';
-    if (meta) meta.textContent = `${visibleCards} archived source${visibleCards === 1 ? '' : 's'}`;
+    setText($('#source-eyebrow'), 'Comment Collection');
+    setText($('#content-title'), 'Archive');
+    setText($('#content-meta'), `${visibleCards} archived source${visibleCards === 1 ? '' : 's'}`);
   }
 
   if (cards.length || archiveView || mode === 'sources') {
@@ -237,7 +242,7 @@ function postprocess() {
 }
 
 function schedulePostprocess() {
-  if (postFrame) cancelAnimationFrame(postFrame);
+  if (postFrame) return;
   postFrame = requestAnimationFrame(() => {
     postFrame = null;
     postprocess();
@@ -245,17 +250,12 @@ function schedulePostprocess() {
 }
 
 function rerenderOverview() {
-  const currentMode = routeMode();
+  const mode = routeMode();
   applyingRoute = true;
   $('#main-nav .nav-item[data-view="sources"]')?.click();
-  setTimeout(() => {
-    applyingRoute = false;
-    schedulePostprocess();
-    if (currentMode === 'archive') {
-      const title = $('#content-title');
-      if (title) title.textContent = 'Archive';
-    }
-  }, 0);
+  applyingRoute = false;
+  schedulePostprocess();
+  if (mode === 'archive') requestAnimationFrame(postprocess);
 }
 
 function handleSourceAction(button) {
@@ -265,6 +265,7 @@ function handleSourceAction(button) {
   if (!source) return;
 
   const action = button.dataset.sourceAction;
+
   if (action === 'rename') {
     const next = window.prompt('Rename source', source.title || '');
     if (next === null) return;
@@ -325,12 +326,10 @@ function applyRoute() {
     const sourceButton = $$('.source-item').find((item) => item.dataset.sourceId === sourceId);
     if (sourceButton) {
       sourceButton.click();
-      const filterButton = $$('#top-tabs .top-tab').find((item) => item.dataset.filter === filter);
-      filterButton?.click();
+      $$('#top-tabs .top-tab').find((item) => item.dataset.filter === filter)?.click();
       if (commentId) {
         requestAnimationFrame(() => {
-          const card = $$('.comment-card').find((item) => item.dataset.commentId === commentId && item.dataset.sourceId === sourceId);
-          card?.click();
+          $$('.comment-card').find((item) => item.dataset.commentId === commentId && item.dataset.sourceId === sourceId)?.click();
         });
       }
     } else {
@@ -344,11 +343,9 @@ function applyRoute() {
     (navButton || $('#main-nav .nav-item[data-view="sources"]'))?.click();
   }
 
-  setTimeout(() => {
-    applyingRoute = false;
-    initialized = true;
-    schedulePostprocess();
-  }, 0);
+  applyingRoute = false;
+  initialized = true;
+  schedulePostprocess();
 }
 
 document.addEventListener('click', (event) => {
@@ -398,24 +395,28 @@ document.addEventListener('click', (event) => {
 
   const commentCard = event.target.closest?.('.comment-card');
   if (commentCard?.dataset.commentId && !event.target.closest?.('[data-action]')) {
-    const activeSource = commentCard.dataset.sourceId;
     const activeFilter = $('#top-tabs .top-tab.is-active')?.dataset.filter || 'comments';
-    if (activeSource) writeRoute({ source: activeSource, filter: activeFilter, comment: commentCard.dataset.commentId });
+    writeRoute({ source: commentCard.dataset.sourceId, filter: activeFilter, comment: commentCard.dataset.commentId });
   }
 });
 
 $('#search-input')?.addEventListener('input', updateAuxState);
 $('#sort-select')?.addEventListener('change', updateAuxState);
-
 window.addEventListener('popstate', applyRoute);
 
+// Observe only replacement of the top-level rendered lists. The old version
+// watched every descendant mutation and then mutated those descendants again,
+// creating a requestAnimationFrame/MutationObserver feedback loop that could
+// peg a CPU core and make the entire page appear frozen.
 const commentsList = $('#comments-list');
 const sourcesList = $('#sources-list');
-if (commentsList) new MutationObserver(schedulePostprocess).observe(commentsList, { childList: true, subtree: true });
-if (sourcesList) new MutationObserver(schedulePostprocess).observe(sourcesList, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+if (commentsList) new MutationObserver(schedulePostprocess).observe(commentsList, { childList: true });
+if (sourcesList) new MutationObserver(schedulePostprocess).observe(sourcesList, { childList: true });
 
 removeSourcesPlus();
 ensureArchiveNav();
 configureBrandHome();
 enableWhisperTextSelection();
 applyRoute();
+
+console.info('[CC navigation] observers ready without subtree feedback');
