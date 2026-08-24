@@ -68,10 +68,63 @@
   color: var(--accent);
 }
 
+/* Explicit Instagram media downloads live beside Refresh. */
+.instagram-media-action[hidden] {
+  display: none !important;
+}
+
+.instagram-downloaded-media {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 9px 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.instagram-downloaded-media[hidden] {
+  display: none;
+}
+
+.instagram-downloaded-media::-webkit-scrollbar {
+  display: none;
+}
+
+.instagram-downloaded-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.instagram-downloaded-item {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+}
+
+.instagram-downloaded-item:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* Stable CC-local number for each comment inside its source. */
 .comment-card {
+  position: relative;
   grid-template-columns: 34px 42px minmax(0, 1fr);
   gap: 12px;
+  touch-action: pan-y;
+  transition: transform 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
 }
 
 .comment-card::before {
@@ -90,6 +143,24 @@
 .comment-card.is-selected::before,
 .comment-card.is-highlighted::before {
   color: var(--accent);
+}
+
+/* Horizontal gesture: right saves, left deletes. */
+.comment-card.is-swipe-dragging {
+  z-index: 2;
+  transform: translateX(var(--cc-swipe-x, 0));
+  transition: none;
+  user-select: none;
+}
+
+.comment-card.is-swipe-saving {
+  box-shadow: inset 5px 0 0 #2f8f55;
+  background-color: rgba(47, 143, 85, 0.07);
+}
+
+.comment-card.is-swipe-deleting {
+  box-shadow: inset -5px 0 0 var(--danger);
+  background-color: rgba(180, 40, 40, 0.06);
 }
 
 /* Source overview actions. */
@@ -176,7 +247,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .top-tabs:has(.top-tab:disabled),
-  .right-panel:has(#note-textarea:disabled) {
+  .right-panel:has(#note-textarea:disabled),
+  .comment-card {
     transition: none;
   }
 }
