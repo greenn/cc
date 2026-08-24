@@ -27,6 +27,11 @@
   outline-offset: 3px;
 }
 
+/* Let long source metadata shrink inside the header instead of widening it. */
+.content-title-wrap {
+  min-width: 0;
+}
+
 /* Source header: platform · author · original URL. Long URLs stay on one line,
    scroll horizontally with the wheel/trackpad, and keep the scrollbar hidden. */
 .source-meta-row {
