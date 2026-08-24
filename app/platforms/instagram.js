@@ -80,6 +80,15 @@ export const instagramAdapter = {
       maxClicks: 40,
     }, 120000);
 
+    if (result?.mediaAvailability) {
+      window.dispatchEvent(new CustomEvent('cc:instagram-media-availability', {
+        detail: {
+          sourceId: source.id,
+          availability: result.mediaAvailability,
+        },
+      }));
+    }
+
     const comments = Array.isArray(result?.comments) ? result.comments : [];
     if (!comments.length) {
       const diagnostic = result?.diagnostics || {};
