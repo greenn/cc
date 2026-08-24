@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = '0.4.7';
+  const VERSION = '0.4.9';
   const startedAt = performance.now();
   const prefix = `[CC ${VERSION}]`;
 
