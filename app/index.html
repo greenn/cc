@@ -5,17 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#fff6cf" />
   <title>CC — Comment Collection</title>
-  <link rel="stylesheet" href="./styles.css?v=0.4.7" />
-  <link rel="stylesheet" href="./ui-state.css?v=0.4.7" />
-  <link rel="stylesheet" href="./transcript.css?v=0.4.7" />
-  <script src="./debug.js?v=0.4.7"></script>
+  <link rel="stylesheet" href="./styles.css?v=0.4.8" />
+  <link rel="stylesheet" href="./ui-state.css?v=0.4.8" />
+  <link rel="stylesheet" href="./transcript.css?v=0.4.8" />
+  <script>
+    window.__CC_BOOT_STARTED_AT__ = performance.now();
+    console.info('[CC 0.4.8] HTML boot', { href: location.href, readyState: document.readyState });
+  </script>
 </head>
 <body>
+  <div id="cc-boot-error" hidden style="position:fixed;z-index:99999;left:20px;right:20px;top:20px;padding:14px 16px;background:#fff2f2;color:#8d1c1c;border:1px solid #e6b4b4;font:13px/1.45 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.12)"></div>
+
   <main class="app-shell">
     <aside class="left-panel" aria-label="Main navigation" title="Navigation, saved views, and source list.">
       <div class="brand">
         <span class="brand-mark">CC</span>
-        <div class="brand-copy"><strong>Comment Collection</strong><span>0.4.7</span></div>
+        <div class="brand-copy"><strong>Comment Collection</strong><span>0.4.8</span></div>
       </div>
       <button class="sidebar-add-link" id="add-link-button" type="button">+ Add link</button>
       <div class="sidebar-main-separator" aria-hidden="true"></div>
@@ -217,12 +222,33 @@
     </form>
   </dialog>
 
-  <script type="module" src="./app-boot.js?v=0.4.7"></script>
-  <script type="module" src="./comment-ui.js?v=0.4.7"></script>
-  <script type="module" src="./vk-settings.js?v=0.4.7"></script>
-  <script type="module" src="./helper-settings.js?v=0.4.7"></script>
-  <script type="module" src="./backend-settings.js?v=0.4.7"></script>
-  <script type="module" src="./whisper-settings.js?v=0.4.7"></script>
-  <script type="module" src="./transcript.js?v=0.4.7"></script>
+  <script type="module">
+    const VERSION = '0.4.8';
+    const errorBox = document.querySelector('#cc-boot-error');
+    const localBoot = `./app-boot.js?v=${VERSION}`;
+    const fallbackBoot = `https://raw.githubusercontent.com/greenn/cc/main/app/app-boot.js?v=${VERSION}`;
+
+    function showBootError(localError, fallbackError) {
+      const message = `CC could not load its JavaScript. Your saved data was not deleted; the app simply could not read localStorage because the runtime failed to start. Local error: ${localError?.message || localError}. Fallback error: ${fallbackError?.message || fallbackError}.`;
+      console.error(`[CC ${VERSION}] startup failed completely`, { localError, fallbackError });
+      if (errorBox) {
+        errorBox.hidden = false;
+        errorBox.textContent = message;
+      }
+    }
+
+    try {
+      await import(localBoot);
+      console.info(`[CC ${VERSION}] local runtime loaded`, { elapsedMs: Math.round(performance.now() - window.__CC_BOOT_STARTED_AT__) });
+    } catch (localError) {
+      console.warn(`[CC ${VERSION}] GitHub Pages runtime failed; trying raw GitHub fallback`, localError);
+      try {
+        await import(fallbackBoot);
+        console.warn(`[CC ${VERSION}] fallback runtime active`, { elapsedMs: Math.round(performance.now() - window.__CC_BOOT_STARTED_AT__) });
+      } catch (fallbackError) {
+        showBootError(localError, fallbackError);
+      }
+    }
+  </script>
 </body>
 </html>
