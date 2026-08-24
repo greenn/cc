@@ -12,7 +12,7 @@
   }
 
   function absoluteUrl(value) {
-    if (!value) return '';
+    if (!value || String(value).startsWith('blob:')) return '';
     try {
       return new URL(value, location.href).toString();
     } catch {
@@ -50,11 +50,19 @@
         });
       });
     }
+
+    // Instagram can feed <video> through a blob URL. In that case the real
+    // signed CDN request is still visible in the page's resource timings.
+    performance.getEntriesByType('resource').forEach((entry) => {
+      const url = absoluteUrl(entry.name);
+      if (!url) return;
+      if (/\.(mp4|webm|mov)(?:$|[?#])/i.test(url) || /video/i.test(entry.initiatorType || '')) found.add(url);
+    });
+
     return [...found];
   }
 
   async function collectMedia(kind) {
-    // Give Instagram a moment to hydrate signed CDN URLs after document_idle.
     await new Promise((resolve) => setTimeout(resolve, 700));
     const urls = kind === 'video' ? collectVideos() : collectPhotos();
     return {
