@@ -27,6 +27,42 @@
   outline-offset: 3px;
 }
 
+/* Source header: platform · author · original URL. Long URLs stay on one line,
+   scroll horizontally with the wheel/trackpad, and keep the scrollbar hidden. */
+.source-meta-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+}
+
+.source-meta-row::-webkit-scrollbar {
+  display: none;
+}
+
+.source-meta-separator {
+  flex: 0 0 auto;
+  opacity: 0.65;
+}
+
+.source-meta-link {
+  flex: 0 0 auto;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.source-meta-link:hover {
+  color: var(--accent);
+}
+
 /* Stable CC-local number for each comment inside its source. */
 .comment-card {
   grid-template-columns: 34px 42px minmax(0, 1fr);
