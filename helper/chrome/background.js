@@ -110,9 +110,6 @@ async function createInstagramWorkerTab(targetUrl, caller) {
   const tab = await chrome.tabs.create(createProperties);
   if (!tab.id) throw new Error('Could not open Instagram background tab.');
 
-  // Chrome normally respects active:false, but re-assert the CC tab immediately
-  // and again after Instagram finishes loading. This also protects against a
-  // page/window attempting to steal focus while the helper is working.
   await restoreCallerFocus(caller);
   await waitForTabComplete(tab.id);
   await restoreCallerFocus(caller);
@@ -123,9 +120,6 @@ async function createInstagramWorkerTab(targetUrl, caller) {
 async function collectInstagram(payload, caller) {
   if (!payload?.url) throw new Error('Instagram URL is missing.');
 
-  // Never reuse or navigate a user's existing Instagram tab. A dedicated
-  // temporary inactive tab is much safer: Refresh cannot hijack another tab,
-  // and the worker tab is always closed when collection finishes.
   const tabId = await createInstagramWorkerTab(payload.url, caller);
   await new Promise((resolve) => setTimeout(resolve, 1200));
   await restoreCallerFocus(caller);
@@ -141,7 +135,6 @@ async function collectInstagram(payload, caller) {
       await restoreCallerFocus(caller);
       return result;
     } catch (error) {
-      // The content script may not yet be ready immediately after navigation.
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await restoreCallerFocus(caller);
       const result = await sendTabMessage(tabId, {
@@ -163,6 +156,100 @@ async function collectInstagram(payload, caller) {
   }
 }
 
+function safePathPart(value, fallback = 'post') {
+  const cleaned = String(value || '')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 80);
+  return cleaned || fallback;
+}
+
+function extensionFor(url, kind) {
+  try {
+    const ext = new URL(url).pathname.match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
+    if (ext && ['jpg', 'jpeg', 'png', 'webp', 'gif', 'mp4', 'webm', 'mov'].includes(ext)) return ext;
+  } catch { /* fallback below */ }
+  return kind === 'video' ? 'mp4' : 'jpg';
+}
+
+function downloadUrl(url, filename) {
+  return new Promise((resolve, reject) => {
+    chrome.downloads.download({
+      url,
+      filename,
+      conflictAction: 'uniquify',
+      saveAs: false,
+    }, (downloadId) => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else if (!downloadId) reject(new Error('Chrome did not start the media download.'));
+      else resolve(downloadId);
+    });
+  });
+}
+
+async function downloadInstagramMedia(payload, caller) {
+  if (!payload?.url) throw new Error('Instagram URL is missing.');
+  const kind = payload.kind === 'video' ? 'video' : 'photos';
+  const tabId = await createInstagramWorkerTab(payload.url, caller);
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  await restoreCallerFocus(caller);
+
+  try {
+    let detected;
+    try {
+      detected = await sendTabMessage(tabId, { type: 'CC_INSTAGRAM_MEDIA', kind });
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      detected = await sendTabMessage(tabId, { type: 'CC_INSTAGRAM_MEDIA', kind });
+    }
+
+    const urls = Array.isArray(detected?.urls) ? [...new Set(detected.urls)].filter(Boolean) : [];
+    const shortcode = safePathPart(payload.externalId || payload.sourceId?.split(':').pop(), 'post');
+    const folder = kind === 'video' ? 'video' : 'photos';
+    const items = [];
+
+    for (let index = 0; index < urls.length; index += 1) {
+      const url = urls[index];
+      if (!/^https?:/i.test(url)) continue;
+      const ext = extensionFor(url, kind);
+      const filename = `CC/Instagram/${shortcode}/${folder}/${String(index + 1).padStart(2, '0')}.${ext}`;
+      const downloadId = await downloadUrl(url, filename);
+      items.push({
+        kind,
+        url,
+        filename,
+        downloadId,
+        downloadedAt: new Date().toISOString(),
+      });
+    }
+
+    await restoreCallerFocus(caller);
+    return {
+      kind,
+      items,
+      counts: detected?.counts || null,
+      pageUrl: detected?.pageUrl || payload.url,
+    };
+  } finally {
+    try {
+      await chrome.tabs.remove(tabId);
+    } catch {
+      // The user may have closed the worker tab.
+    }
+    await restoreCallerFocus(caller);
+  }
+}
+
+function callerFromSender(sender) {
+  return {
+    tabId: sender.tab?.id || null,
+    windowId: sender.tab?.windowId || null,
+    index: Number.isInteger(sender.tab?.index) ? sender.tab.index : null,
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'CC_HELPER_BRIDGE_READY') {
     setConnectedBadge(sender.tab?.id);
@@ -176,15 +263,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     setConnectedBadge(sender.tab?.id);
 
     if (message.action === 'ping') {
-      return { version: chrome.runtime.getManifest().version, capabilities: ['instagram'] };
+      return { version: chrome.runtime.getManifest().version, capabilities: ['instagram', 'instagram-media-download'] };
     }
     if (message.action === 'instagram.collect') {
-      const caller = {
-        tabId: sender.tab?.id || null,
-        windowId: sender.tab?.windowId || null,
-        index: Number.isInteger(sender.tab?.index) ? sender.tab.index : null,
-      };
-      return await collectInstagram(message.payload || {}, caller);
+      return await collectInstagram(message.payload || {}, callerFromSender(sender));
+    }
+    if (message.action === 'instagram.downloadMedia') {
+      return await downloadInstagramMedia(message.payload || {}, callerFromSender(sender));
+    }
+    if (message.action === 'download.open') {
+      const downloadId = Number(message.payload?.downloadId || 0);
+      if (!downloadId) throw new Error('Downloaded file ID is missing.');
+      await chrome.downloads.open(downloadId);
+      return { opened: true };
     }
     throw new Error(`Unsupported helper action: ${message.action}`);
   })().then(
