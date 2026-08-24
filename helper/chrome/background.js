@@ -86,39 +86,58 @@ async function getInstagramTab(targetUrl) {
   const marker = target.pathname.split('/').filter(Boolean).find((part) => part.length > 5) || target.pathname;
   const tabs = await chrome.tabs.query({ url: ['https://www.instagram.com/*', 'https://instagram.com/*'] });
   const existing = tabs.find((tab) => tab.url?.includes(marker));
+
   if (existing?.id) {
-    await chrome.tabs.update(existing.id, { active: true, url: targetUrl });
-    await waitForTabComplete(existing.id);
-    return existing.id;
+    // Never activate/focus Instagram merely because CC is collecting comments.
+    // Reuse an already-open matching post/reel in place.
+    if (existing.url !== targetUrl) {
+      await chrome.tabs.update(existing.id, { url: targetUrl });
+      await waitForTabComplete(existing.id);
+    } else if (existing.status !== 'complete') {
+      await waitForTabComplete(existing.id);
+    }
+    return { tabId: existing.id, created: false };
   }
 
-  const tab = await chrome.tabs.create({ url: targetUrl, active: true });
-  if (!tab.id) throw new Error('Could not open Instagram tab.');
+  // A temporary inactive tab lets Instagram render with the user's existing
+  // signed-in session without stealing focus from CC. It is closed afterwards.
+  const tab = await chrome.tabs.create({ url: targetUrl, active: false });
+  if (!tab.id) throw new Error('Could not open Instagram background tab.');
   await waitForTabComplete(tab.id);
-  return tab.id;
+  return { tabId: tab.id, created: true };
 }
 
 async function collectInstagram(payload) {
   if (!payload?.url) throw new Error('Instagram URL is missing.');
-  const tabId = await getInstagramTab(payload.url);
+  const { tabId, created } = await getInstagramTab(payload.url);
   await new Promise((resolve) => setTimeout(resolve, 1200));
 
   try {
-    return await sendTabMessage(tabId, {
-      type: 'CC_INSTAGRAM_COLLECT',
-      url: payload.url,
-      sourceId: payload.sourceId,
-      maxClicks: payload.maxClicks || 40,
-    });
-  } catch (error) {
-    // The content script may not yet be ready immediately after navigation.
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    return await sendTabMessage(tabId, {
-      type: 'CC_INSTAGRAM_COLLECT',
-      url: payload.url,
-      sourceId: payload.sourceId,
-      maxClicks: payload.maxClicks || 40,
-    });
+    try {
+      return await sendTabMessage(tabId, {
+        type: 'CC_INSTAGRAM_COLLECT',
+        url: payload.url,
+        sourceId: payload.sourceId,
+        maxClicks: payload.maxClicks || 40,
+      });
+    } catch (error) {
+      // The content script may not yet be ready immediately after navigation.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return await sendTabMessage(tabId, {
+        type: 'CC_INSTAGRAM_COLLECT',
+        url: payload.url,
+        sourceId: payload.sourceId,
+        maxClicks: payload.maxClicks || 40,
+      });
+    }
+  } finally {
+    if (created) {
+      try {
+        await chrome.tabs.remove(tabId);
+      } catch {
+        // The user may have closed the temporary tab first.
+      }
+    }
   }
 }
 
