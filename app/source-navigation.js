@@ -91,18 +91,6 @@ function configureBrandHome() {
   });
 }
 
-async function syncVisibleVersion() {
-  try {
-    const response = await fetch('../VERSION.json', { cache: 'no-store' });
-    if (!response.ok) return;
-    const data = await response.json();
-    const node = $('.brand-copy span');
-    if (node && data?.version) node.textContent = data.version;
-  } catch {
-    // Keep the HTML fallback version if VERSION.json cannot be read.
-  }
-}
-
 function removeSourcesPlus() {
   $('#left-add-link')?.remove();
 }
@@ -430,5 +418,4 @@ removeSourcesPlus();
 ensureArchiveNav();
 configureBrandHome();
 enableWhisperTextSelection();
-syncVisibleVersion();
 applyRoute();
