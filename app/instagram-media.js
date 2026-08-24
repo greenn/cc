@@ -171,6 +171,22 @@ document.addEventListener('click', (event) => {
   }
 });
 
+window.addEventListener('cc:instagram-media-availability', (event) => {
+  const sourceId = event.detail?.sourceId;
+  const availability = event.detail?.availability;
+  if (!sourceId || !availability) return;
+  const source = store.getSource(sourceId);
+  if (!source) return;
+  store.updateSource(sourceId, {
+    instagramMediaAvailability: {
+      ...(source.instagramMediaAvailability || {}),
+      video: Boolean(availability.video),
+      photos: Boolean(availability.photos),
+    },
+  });
+  render();
+});
+
 window.addEventListener('popstate', () => requestAnimationFrame(render));
 
 ensureUi();
