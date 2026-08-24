@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.12`.
+Current baseline version: `0.4.13`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.12`;
-- another change on the same day: `0.4.13`;
+- current version: `0.4.13`;
+- another change on the same day: `0.4.14`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -55,15 +55,18 @@ These are default product conventions for applications we build:
 - Prefer explicit URL state such as `view`, `source`, `filter`, and selected item identifiers rather than invisible navigation-only state.
 - Archive is a separate source view; archived sources should not clutter the normal Sources list.
 - On initial load, do not render an arbitrary first source before applying the URL route. The Home/Sources route must boot directly into the lightweight source overview without creating comment cards or starting avatar/network requests for a source the user did not open.
+- When a source is open, show its original URL next to the platform/author metadata as a clickable link. Long source URLs should remain one line and be horizontally scrollable without a visible scrollbar.
 
 ## Instagram Browser Helper behavior
 
 - Adding an Instagram source must never open or focus Instagram.
 - Clicking/opening an Instagram source inside CC must never open or focus Instagram merely because the source currently has zero downloaded comments.
 - Only an explicit Refresh should request a new Instagram scrape.
-- The helper should perform that scrape in an inactive/background tab and must not steal focus from CC.
-- A helper-created temporary Instagram tab should be closed after the scrape completes; an already-open matching Instagram tab may be reused without activating it.
+- The helper should perform that scrape in a dedicated inactive/background temporary tab and must not steal focus from CC.
+- Do not navigate or reuse the user's existing Instagram tabs for a scrape.
+- A helper-created temporary Instagram tab should be closed after the scrape completes.
 - Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
+- When a refresh returns zero candidates, zero permalinks, and zero timestamps, do not claim with certainty that the post was deleted. It may be deleted/unavailable or Instagram may not have exposed usable markup. Offer the user a confirmation to remove that source from CC.
 
 ## Avatar loading policy
 
