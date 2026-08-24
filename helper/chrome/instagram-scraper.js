@@ -24,6 +24,12 @@
     }) || null;
   }
 
+  function usernameFromAnchor(anchor) {
+    if (!anchor) return '';
+    return (anchor.getAttribute('href') || '').split('?')[0].split('/').filter(Boolean)[0]
+      || (anchor.textContent || '').trim();
+  }
+
   function isUiText(text, username = '') {
     const value = String(text || '').trim();
     if (!value || value === username || value === `@${username}`) return true;
@@ -48,7 +54,8 @@
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 1 && !isUiText(line, username))
-      .filter((line) => !/^[\d.,\s]+[kKmMкКмМ]?\s*(likes?|отмет)/i.test(line));
+      .filter((line) => !/^[\d.,\s]+[kKmMкКмМ]?\s*(likes?|отмет)/i.test(line))
+      .filter((line) => !/^(view|show|посмотреть|показать)\s+\d+/i.test(line));
 
     return [...new Set(lines)].sort((a, b) => b.length - a.length)[0] || '';
   }
@@ -81,30 +88,59 @@
   }
 
   function candidateScore(node) {
-    if (!node || !profileAnchor(node)) return Infinity;
+    if (!node) return Infinity;
+    const authorLink = profileAnchor(node);
+    if (!authorLink) return Infinity;
+    const username = usernameFromAnchor(authorLink);
+    if (!username) return Infinity;
+
     const textLength = (node.innerText || '').trim().length;
-    if (textLength < 2 || textLength > 4000) return Infinity;
-    const profiles = node.querySelectorAll('a[href^="/"]').length;
+    if (textLength < 2 || textLength > 2500) return Infinity;
+
     const hasTime = Boolean(node.querySelector('time'));
     const hasPermalink = Boolean(commentPermalink(node));
     if (!hasTime && !hasPermalink) return Infinity;
-    return textLength + profiles * 150 - (hasPermalink ? 500 : 0);
+
+    // A timestamp/permalink often sits in a tiny metadata sub-container. The
+    // old scorer selected that container even though the actual comment text
+    // lived one or two ancestors higher. Require meaningful non-UI text before
+    // accepting a candidate, then strongly prefer containers with few profiles.
+    const text = cleanCandidateText(node, username);
+    if (!text || text.length < 2) return Infinity;
+
+    const profiles = node.querySelectorAll('a[href^="/"]').length;
+    if (profiles > 8) return Infinity;
+
+    return textLength + profiles * 350 - (hasPermalink ? 180 : 0);
   }
 
   function nearestCommentContainer(seed, root) {
     let node = seed?.nodeType === Node.ELEMENT_NODE ? seed : seed?.parentElement;
     let best = null;
     let bestScore = Infinity;
-    for (let depth = 0; node && depth < 9; depth += 1, node = node.parentElement) {
+    for (let depth = 0; node && depth < 12; depth += 1, node = node.parentElement) {
       if (root && !root.contains(node)) break;
       const score = candidateScore(node);
       if (score < bestScore) {
         best = node;
         bestScore = score;
       }
-      if (node.matches?.('li')) break;
+      if (node.matches?.('li') && best) break;
     }
     return best;
+  }
+
+  function expandForCommentText(node, username) {
+    let current = node;
+    for (let depth = 0; current && depth < 6; depth += 1, current = current.parentElement) {
+      const rawLength = (current.innerText || '').trim().length;
+      if (rawLength > 3500) break;
+      const profiles = current.querySelectorAll('a[href^="/"]').length;
+      if (profiles > 10) break;
+      const text = cleanCandidateText(current, username);
+      if (text && text.length >= 2) return { node: current, text };
+    }
+    return { node, text: '' };
   }
 
   function commentNodes() {
@@ -125,12 +161,8 @@
     };
 
     for (const root of roots) {
-      // Older Instagram markup used UL/LI for comments.
       root.querySelectorAll('ul li').forEach(push);
 
-      // Current markup usually gives each comment timestamp/permalink even when
-      // the surrounding UL/LI structure changes. Start from the most specific
-      // anchors/times and walk up to the smallest useful comment container.
       root.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').forEach((anchor) => {
         push(nearestCommentContainer(anchor, root));
       });
@@ -146,18 +178,20 @@
     const output = [];
     const seen = new Set();
 
-    for (const node of commentNodes()) {
-      const authorLink = profileAnchor(node);
+    for (const initialNode of commentNodes()) {
+      const authorLink = profileAnchor(initialNode);
       if (!authorLink) continue;
-      const username = (authorLink.getAttribute('href') || '').split('?')[0].split('/').filter(Boolean)[0] || (authorLink.textContent || '').trim();
+      const username = usernameFromAnchor(authorLink);
       if (!username) continue;
 
-      const text = cleanCandidateText(node, username);
+      const expanded = expandForCommentText(initialNode, username);
+      const node = expanded.node;
+      const text = expanded.text;
       if (!text || text.length < 2) continue;
 
-      const time = node.querySelector('time');
+      const time = node.querySelector('time') || initialNode.querySelector('time');
       const publishedAt = time?.getAttribute('datetime') || null;
-      const permalink = commentPermalink(node);
+      const permalink = commentPermalink(node) || commentPermalink(initialNode);
       let originalUrl = url;
       let explicitId = '';
       if (permalink) {
@@ -277,6 +311,7 @@
       commentCandidates: commentNodes().length,
       permalinkAnchors: document.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').length,
       timestamps: document.querySelectorAll('time').length,
+      parsedComments: comments.length,
       loadButtons: moreButtons().length,
       loggedOut: isLoggedOut(),
     };
