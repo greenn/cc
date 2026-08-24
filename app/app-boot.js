@@ -1,16 +1,18 @@
-const VERSION = '0.4.13';
+const VERSION = '0.4.14';
 
 const modules = [
   './boot-route.js',
   './avatar-policy.js',
   './app.js',
   './source-meta.js',
+  './instagram-media.js',
   './vk-settings.js',
   './helper-settings.js',
   './backend-settings.js',
   './whisper-settings.js',
   './transcript.js',
   './comment-ui.js',
+  './comment-gestures.js',
 ];
 
 const loadedModules = window.__CC_LOADED_MODULES__ ||= new Set();
