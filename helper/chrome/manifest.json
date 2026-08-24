@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CC Browser Helper",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Browser helper for CC — Comment Collection. Uses the signed-in browser session to collect comments from supported sites such as Instagram.",
   "permissions": ["tabs", "scripting"],
   "host_permissions": [
