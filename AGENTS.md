@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.7`.
+Current baseline version: `0.4.8`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.7`;
-- another change on the same day: `0.4.8`;
+- current version: `0.4.8`;
+- another change on the same day: `0.4.9`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -30,10 +30,18 @@ For every version bump:
    - `version` to the new version;
    - `lastChangeDate` to the local date of that change in `YYYY-MM-DD` form.
 2. Update the visible version in `app/index.html` to the same version. Do not rely only on JavaScript to replace a stale fallback version.
-3. Update the `?v=<version>` cache-busting token on the app CSS and top-level module script references in `app/index.html`. This is required so GitHub Pages/browser caches do not keep an older UI after a deployment.
+3. Update the `?v=<version>` cache-busting token on the app CSS and top-level runtime loader references in `app/index.html`. This is required so GitHub Pages/browser caches do not keep an older UI after a deployment.
 4. Keep extension/helper versions independent from the CC application version.
 
 Do not use the Chrome helper extension version as the CC application version. `helper/chrome/manifest.json` has its own independent extension version.
+
+## Runtime loading
+
+- `app/index.html` must not depend on many independent top-level module tags. Start the application through `app/app-boot.js`.
+- `app/app-boot.js` loads application modules in a controlled order and records completed modules so a fallback can safely resume rather than double-initialize them.
+- If GitHub Pages returns a transient error for a JavaScript module, the HTML bootstrap may fall back to the same runtime from the public GitHub raw source.
+- If both primary and fallback runtimes fail, show a visible startup error in the page. Never leave a dead-looking UI with no explanation.
+- A JavaScript startup failure must not clear or reset localStorage. The static empty-state text is not proof that user data has been deleted.
 
 ## Navigation conventions
 
