@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#fff6cf" />
   <title>CC — Comment Collection</title>
-  <link rel="stylesheet" href="./styles.css?v=0.4.11" />
-  <link rel="stylesheet" href="./ui-state.css?v=0.4.11" />
-  <link rel="stylesheet" href="./transcript.css?v=0.4.11" />
+  <link rel="stylesheet" href="./styles.css?v=0.4.12" />
+  <link rel="stylesheet" href="./ui-state.css?v=0.4.12" />
+  <link rel="stylesheet" href="./transcript.css?v=0.4.12" />
   <script>
     window.__CC_BOOT_STARTED_AT__ = performance.now();
-    console.info('[CC 0.4.11] HTML boot', { href: location.href, readyState: document.readyState });
+    console.info('[CC 0.4.12] HTML boot', { href: location.href, readyState: document.readyState });
   </script>
 </head>
 <body>
@@ -20,7 +20,7 @@
     <aside class="left-panel" aria-label="Main navigation" title="Navigation, saved views, and source list.">
       <div class="brand">
         <span class="brand-mark">CC</span>
-        <div class="brand-copy"><strong>Comment Collection</strong><span>0.4.11</span></div>
+        <div class="brand-copy"><strong>Comment Collection</strong><span>0.4.12</span></div>
       </div>
       <button class="sidebar-add-link" id="add-link-button" type="button">+ Add link</button>
       <div class="sidebar-main-separator" aria-hidden="true"></div>
@@ -190,7 +190,7 @@
 
       <div style="height:1px;background:#e7e7e7;margin:8px 0 2px"></div>
       <div><p class="eyebrow" style="margin-bottom:2px">Instagram</p><strong style="font-size:13px">CC Browser Helper</strong></div>
-      <p class="form-hint">Install <code>helper/chrome/</code> as an unpacked Chrome extension. It opens Instagram in your existing signed-in browser session and returns comments that the page can display.</p>
+      <p class="form-hint">Install <code>helper/chrome/</code> as an unpacked Chrome extension. On Refresh it uses your existing signed-in Instagram session in a temporary background tab and returns rendered comments to CC without switching you away from the app.</p>
       <div id="helper-status" class="form-error" hidden></div>
       <div style="display:flex;justify-content:flex-start"><button id="helper-check" class="ghost-action" type="button">Check helper</button></div>
 
@@ -223,7 +223,7 @@
   </dialog>
 
   <script type="module">
-    const VERSION = '0.4.11';
+    const VERSION = '0.4.12';
     const errorBox = document.querySelector('#cc-boot-error');
     const localBoot = `./app-boot.js?v=${VERSION}`;
     const fallbackBoot = `https://raw.githubusercontent.com/greenn/cc/main/app/app-boot.js?v=${VERSION}`;
