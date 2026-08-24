@@ -1,5 +1,5 @@
 import { store } from './store.js';
-import './source-navigation.js';
+import './source-navigation.js?v=0.4.10';
 import './recognition-ui.js';
 
 const contentArea = document.querySelector('#content-area');
