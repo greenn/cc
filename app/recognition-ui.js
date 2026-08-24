@@ -40,16 +40,20 @@ function normalizeRecognitionUi() {
   if (group) {
     $$('[data-recognize-model]').forEach((button) => {
       const isLarge = button.dataset.recognizeModel === MODEL;
-      button.hidden = !isLarge;
+      if (button.hidden === isLarge) button.hidden = !isLarge;
       if (!isLarge) return;
       if (button.textContent !== 'Распознать') button.textContent = 'Распознать';
-      button.title = 'Распознать видео через Whisper large-v3';
-      button.setAttribute('aria-label', 'Распознать видео через Whisper large-v3');
+      if (button.title !== 'Распознать видео через Whisper large-v3') {
+        button.title = 'Распознать видео через Whisper large-v3';
+      }
+      if (button.getAttribute('aria-label') !== 'Распознать видео через Whisper large-v3') {
+        button.setAttribute('aria-label', 'Распознать видео через Whisper large-v3');
+      }
     });
   }
 
   const dialogRun = $('#transcript-run');
-  if (dialogRun && dialogRun.textContent !== 'Распознать') {
+  if (dialogRun && !dialogRun.disabled && dialogRun.textContent !== 'Распознать') {
     dialogRun.textContent = 'Распознать';
   }
 }
@@ -70,7 +74,10 @@ document.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopImmediatePropagation();
       normalizeRecognitionUi();
+      return;
     }
+
+    queueMicrotask(normalizeRecognitionUi);
     return;
   }
 
@@ -81,16 +88,16 @@ document.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
     normalizeRecognitionUi();
+    return;
   }
+
+  queueMicrotask(normalizeRecognitionUi);
 }, true);
 
-const observer = new MutationObserver(() => normalizeRecognitionUi());
-observer.observe(document.documentElement, {
-  subtree: true,
-  childList: true,
-  characterData: true,
-  attributes: true,
-  attributeFilter: ['hidden', 'class', 'disabled'],
-});
-
+// Important: do not observe the whole document here. The previous global
+// MutationObserver watched hidden/class/disabled attributes and then changed
+// those same attributes inside its callback. That formed a self-triggering
+// microtask loop and could pin the renderer at ~100% CPU.
 normalizeRecognitionUi();
+
+console.info('[CC recognition] normalized without global MutationObserver');
