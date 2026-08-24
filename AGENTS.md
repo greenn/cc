@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.9`.
+Current baseline version: `0.4.11`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.9`;
-- another change on the same day: `0.4.10`;
+- current version: `0.4.11`;
+- another change on the same day: `0.4.12`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -43,6 +43,8 @@ Do not use the Chrome helper extension version as the CC application version. `h
 - If both primary and fallback runtimes fail, show a visible startup error in the page. Never leave a dead-looking UI with no explanation.
 - A JavaScript startup failure must not clear or reset localStorage. The static empty-state text is not proof that user data has been deleted.
 - Do not fetch `VERSION.json` during normal page runtime just to update the visible version. The deployed HTML/runtime version is already explicit and cache-busted; an extra version fetch can remain pending and keep the browser page in a loading state.
+- Avoid global `MutationObserver` hooks that observe attributes/character data and then mutate the same observed DOM in their callbacks. This can create a self-triggering microtask loop and pin a renderer at 100% CPU without throwing a JavaScript error.
+- Prefer direct render hooks, narrowly scoped observers, and idempotent DOM writes that first check whether the value actually needs to change.
 
 ## Navigation conventions
 
