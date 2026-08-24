@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.8`.
+Current baseline version: `0.4.9`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.8`;
-- another change on the same day: `0.4.9`;
+- current version: `0.4.9`;
+- another change on the same day: `0.4.10`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -42,6 +42,7 @@ Do not use the Chrome helper extension version as the CC application version. `h
 - If GitHub Pages returns a transient error for a JavaScript module, the HTML bootstrap may fall back to the same runtime from the public GitHub raw source.
 - If both primary and fallback runtimes fail, show a visible startup error in the page. Never leave a dead-looking UI with no explanation.
 - A JavaScript startup failure must not clear or reset localStorage. The static empty-state text is not proof that user data has been deleted.
+- Do not fetch `VERSION.json` during normal page runtime just to update the visible version. The deployed HTML/runtime version is already explicit and cache-busted; an extra version fetch can remain pending and keep the browser page in a loading state.
 
 ## Navigation conventions
 
