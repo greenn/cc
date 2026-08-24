@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.11`.
+Current baseline version: `0.4.12`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.11`;
-- another change on the same day: `0.4.12`;
+- current version: `0.4.12`;
+- another change on the same day: `0.4.13`;
 - the first change on the next active development day: `0.5.1`;
 - the next change that same new day: `0.5.2`.
 
@@ -55,6 +55,15 @@ These are default product conventions for applications we build:
 - Prefer explicit URL state such as `view`, `source`, `filter`, and selected item identifiers rather than invisible navigation-only state.
 - Archive is a separate source view; archived sources should not clutter the normal Sources list.
 - On initial load, do not render an arbitrary first source before applying the URL route. The Home/Sources route must boot directly into the lightweight source overview without creating comment cards or starting avatar/network requests for a source the user did not open.
+
+## Instagram Browser Helper behavior
+
+- Adding an Instagram source must never open or focus Instagram.
+- Clicking/opening an Instagram source inside CC must never open or focus Instagram merely because the source currently has zero downloaded comments.
+- Only an explicit Refresh should request a new Instagram scrape.
+- The helper should perform that scrape in an inactive/background tab and must not steal focus from CC.
+- A helper-created temporary Instagram tab should be closed after the scrape completes; an already-open matching Instagram tab may be reused without activating it.
+- Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
 
 ## Avatar loading policy
 
