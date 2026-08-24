@@ -1,9 +1,10 @@
-const VERSION = '0.4.12';
+const VERSION = '0.4.13';
 
 const modules = [
   './boot-route.js',
   './avatar-policy.js',
   './app.js',
+  './source-meta.js',
   './vk-settings.js',
   './helper-settings.js',
   './backend-settings.js',
