@@ -1,15 +1,15 @@
-const VERSION = '0.4.10';
+const VERSION = '0.4.11';
 
 const modules = [
   './boot-route.js',
   './avatar-policy.js',
   './app.js',
-  './comment-ui.js',
   './vk-settings.js',
   './helper-settings.js',
   './backend-settings.js',
   './whisper-settings.js',
   './transcript.js',
+  './comment-ui.js',
 ];
 
 const loadedModules = window.__CC_LOADED_MODULES__ ||= new Set();
