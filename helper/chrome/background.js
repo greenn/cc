@@ -117,6 +117,26 @@ async function createInstagramWorkerTab(targetUrl, caller) {
   return tab.id;
 }
 
+async function getMediaAvailability(tabId) {
+  try {
+    const [video, photos] = await Promise.all([
+      sendTabMessage(tabId, { type: 'CC_INSTAGRAM_MEDIA', kind: 'video' }),
+      sendTabMessage(tabId, { type: 'CC_INSTAGRAM_MEDIA', kind: 'photos' }),
+    ]);
+    return {
+      video: Array.isArray(video?.urls) && video.urls.length > 0,
+      photos: Array.isArray(photos?.urls) && photos.urls.length > 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function decorateCollectResult(tabId, result) {
+  const mediaAvailability = await getMediaAvailability(tabId);
+  return mediaAvailability ? { ...result, mediaAvailability } : result;
+}
+
 async function collectInstagram(payload, caller) {
   if (!payload?.url) throw new Error('Instagram URL is missing.');
 
@@ -133,7 +153,7 @@ async function collectInstagram(payload, caller) {
         maxClicks: payload.maxClicks || 40,
       });
       await restoreCallerFocus(caller);
-      return result;
+      return await decorateCollectResult(tabId, result);
     } catch (error) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await restoreCallerFocus(caller);
@@ -144,7 +164,7 @@ async function collectInstagram(payload, caller) {
         maxClicks: payload.maxClicks || 40,
       });
       await restoreCallerFocus(caller);
-      return result;
+      return await decorateCollectResult(tabId, result);
     }
   } finally {
     try {
