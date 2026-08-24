@@ -18,7 +18,13 @@ for (const modulePath of modules) {
   const url = new URL(modulePath, import.meta.url);
   url.searchParams.set('v', VERSION);
   console.info(`[CC ${VERSION}] loading module`, url.href);
-  await import(url.href);
+  try {
+    await import(url.href);
+  } catch (error) {
+    console.error(`[CC ${VERSION}] module failed`, { module: url.href, error });
+    throw error;
+  }
 }
 
+window.__CC_RUNTIME_READY__ = true;
 console.info(`[CC ${VERSION}] runtime ready`);
