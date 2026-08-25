@@ -13,7 +13,7 @@ function legend(enabled = isEnabled()) {
   return [
     `Shortcuts ${enabled ? 'ON' : 'OFF'}`,
     '← Delete comment',
-    '↓ Save comment',
+    '→ Save comment',
     'Target: selected comment; otherwise the top visible comment',
   ].join('\n');
 }
@@ -99,7 +99,7 @@ document.addEventListener('keydown', (event) => {
 
   let handled = false;
   if (event.key === 'ArrowLeft') handled = performAction('delete');
-  if (event.key === 'ArrowDown') handled = performAction('save');
+  if (event.key === 'ArrowRight') handled = performAction('save');
 
   if (handled) {
     event.preventDefault();
