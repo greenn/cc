@@ -208,6 +208,16 @@
     }
   }
 
+  function isProfileImage(image) {
+    const anchor = image.closest('a[href]');
+    if (!anchor) return false;
+    const href = anchor.getAttribute('href') || '';
+    return /^\/[A-Za-z0-9._]+\/?(?:\?.*)?$/.test(href)
+      && !href.startsWith('/explore/')
+      && !href.startsWith('/accounts/')
+      && !href.startsWith('/direct/');
+  }
+
   function extractAttachments(node, authorAnchor) {
     const attachments = [];
     const seen = new Set();
@@ -219,11 +229,11 @@
     };
 
     for (const image of node.querySelectorAll('img[src]')) {
-      if (authorAnchor?.contains(image)) continue;
+      if (authorAnchor?.contains(image) || isProfileImage(image)) continue;
       const alt = image.getAttribute('alt') || '';
       const rect = image.getBoundingClientRect();
-      const width = Number(image.naturalWidth || rect.width || 0);
-      const height = Number(image.naturalHeight || rect.height || 0);
+      const width = Number(rect.width || image.naturalWidth || 0);
+      const height = Number(rect.height || image.naturalHeight || 0);
       const explicitGraphic = /gif|sticker|стикер|animation|анимац/i.test(alt);
       if (!explicitGraphic && Math.max(width, height) < 56) continue;
       add('image', image.currentSrc || image.src, alt);
