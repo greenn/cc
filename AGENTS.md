@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.26`.
+Current baseline version: `0.5.27`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.26`;
-- another change on the same day: `0.5.27`;
+- current version: `0.5.27`;
+- another change on the same day: `0.5.28`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -45,6 +45,14 @@ Do not use the Chrome helper extension version as the CC application version. `h
 - Do not fetch `VERSION.json` during normal page runtime just to update the visible version. The deployed HTML/runtime version is already explicit and cache-busted; an extra version fetch can remain pending and keep the browser page in a loading state.
 - Avoid global `MutationObserver` hooks that observe attributes/character data and then mutate the same observed DOM in their callbacks. This can create a self-triggering microtask loop and pin a renderer at 100% CPU without throwing a JavaScript error.
 - Prefer direct render hooks, narrowly scoped observers, and idempotent DOM writes that first check whether the value actually needs to change.
+
+## Settings UI
+
+- Settings are split into tabs rather than one long form. Current tabs are `General`, `Translation`, `Instagram`, `VK`, and `Server`.
+- General contains YouTube and local Whisper settings. Existing setting element IDs must remain stable so the service-specific modules can continue to find their controls after the tab UI moves the DOM nodes.
+- Translation exposes the configured default target language and explicitly states the mechanism. The current supported target is Russian.
+- Translation uses Chrome built-in `LanguageDetector` + `Translator` APIs on the local desktop browser; Chrome may download a language pack for a language pair. Do not describe this as a separate remote translation API.
+- Instagram exposes the selectable comment collection method: current DOM collector or experimental Network / GraphQL cursor collector. Persist the selection in local CC settings.
 
 ## Navigation conventions
 
@@ -77,9 +85,13 @@ These are default product conventions for applications we build:
 - Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
 - A zero-comment scrape is not proof that the Instagram source was deleted. Keep the source and leave Refresh available; do not offer destructive deletion based only on missing rendered comment markup.
 - For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
-- Reel comment collection should open the Comments panel if necessary, then accumulate parsed comments while clicking load/reply controls and scrolling the comments panel. Do not return only the final currently-rendered DOM viewport because Instagram can virtualize the list.
-- Mix targeted comment-container scrolling with occasional PageDown-style movement, but do not expose a PageDown-only setting. Synthetic PageDown does not reliably make Instagram advance in an unfocused worker tab; when deeper loading depends on real browser focus, manual use of the temporary worker tab is an accepted workflow.
-- During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments found in the current helper pass, how many have already been streamed and persisted by CC, the current phase, and crawl step.
+- The default/current `DOM collector` opens the Comments panel if necessary, then accumulates parsed comments while clicking load/reply controls and scrolling the comments panel. Do not return only the final currently-rendered DOM viewport because Instagram can virtualize the list.
+- The experimental `Network / GraphQL cursor` collector runs in the signed-in Instagram page, observes the private GraphQL request Instagram itself makes for comments, captures its pagination variables and comment connection, then follows `end_cursor`/`has_next_page` without requiring thousands of comment DOM nodes to remain rendered.
+- The Network / GraphQL collector is a private-web integration, not an official Instagram API. Its request body, `doc_id`, connection shape, and cursor variable names can change without notice. Keep the DOM collector available as a selectable fallback method.
+- Network collection must stream every successfully parsed page to CC immediately in the same normal comment-batch channel. If later GraphQL pagination fails, comments from earlier pages remain saved.
+- Network collection should stop on end cursor, repeated cursor, repeated pages with no new comments, configured page limit, HTTP/format errors, or worker closure. Its progress phases should distinguish waiting for GraphQL, capture, page traversal, and completion.
+- Mix targeted comment-container scrolling with occasional PageDown-style movement in DOM mode, but do not expose a PageDown-only setting. Synthetic PageDown does not reliably make Instagram advance in an unfocused worker tab; when deeper loading depends on real browser focus, manual use of the temporary worker tab is an accepted workflow.
+- During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments found in the current helper pass, how many have already been streamed and persisted by CC, the current phase, and crawl step/page.
 - Stream discovered comments to CC immediately in small batches instead of keeping the entire result only inside the worker tab until the end. CC must upsert each incoming batch synchronously into local storage.
 - Once more than 100 unique comments have been streamed in the current Instagram worker pass, begin pruning old comment DOM to keep long Reel sessions responsive. Keep a small live tail of recent comments (currently 24) so Instagram still has nearby structure for scrolling/loading.
 - DOM pruning must happen only after the Helper has had time to collect/stream the comment. Prefer old off-screen comment containers, skip visible comments and containers with still-unexpanded reply controls, and preserve approximate layout height while removing the heavy child subtree so GIF/video/image animation is released.
@@ -88,7 +100,7 @@ These are default product conventions for applications we build:
 - If the user closes the temporary worker tab early, all batches that were already streamed to CC remain saved. Losing the worker must not roll back already persisted comments; the operation should end with an explicit interrupted/worker-closed message.
 - The final scrape result is still merged once more at normal completion as a safety net. Duplicate platform comment IDs must not create duplicate comments or erase local read/saved/highlight/deleted/note state.
 - Live progress is diagnostic activity, not a promise that every displayed found comment is newly added to local storage. A pass may rediscover comments CC already has; expose the distinction between found/streamed comments and comments that were actually new to the local source.
-- After at least one Instagram comment batch has been loaded, expose a `Load more` action beside Refresh. Each successive deep-load pass uses a larger crawl budget, reopens the temporary worker page, searches farther down the comment panel, and merges only newly discovered comments into the existing local source without deleting previous results.
+- After at least one Instagram comment batch has been loaded, expose a `Load more` action beside Refresh. In DOM mode each successive deep-load pass uses a larger crawl budget and reopens the temporary worker page. In Network mode a pass can traverse many GraphQL cursor pages in one worker session.
 - `Refresh` is for the newest/current Instagram state; `Load more` is for progressively deeper older comments. Running either operation for a source must not stop when the user navigates to another CC source.
 - Instagram media downloads are explicit user actions only. Save requested video/photos to the local Chrome Downloads folder under `CC/Instagram/...`; do not mirror media to the PHP backend by default.
 - Keep downloaded-media metadata in the CC source so the app can show downloaded items above Comments and reopen them through the Browser Helper.
@@ -166,11 +178,11 @@ These are default product conventions for applications we build:
 ## Comment translation
 
 - Each comment has a `Translate` action directly after `Highlight`.
-- Translation target is Russian.
+- Translation target comes from the local `translationTargetLanguage` setting. The currently supported/default value is Russian (`ru`).
 - Use Chrome's built-in Language Detector + Translator APIs when available so comment text is translated locally in the desktop browser.
 - The first translation for a language pair may download the required local language pack; expose progress through the Translate button while it is preparing.
 - Cache the Russian translation in the comment's local CC state. Do not translate the same comment again on every toggle.
-- When translation is active, underline the `Translate` button and show the Russian text. Pressing it again restores the original text without deleting the cached translation.
+- When translation is active, underline the `Translate` button and show the translated text. Pressing it again restores the original text without deleting the cached translation.
 
 ## Avatar loading policy
 
