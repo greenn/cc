@@ -1,4 +1,4 @@
-const VERSION = '0.5.20';
+const VERSION = '0.5.21';
 
 const modules = [
   './boot-route.js',
@@ -9,6 +9,7 @@ const modules = [
   './instagram-media.js',
   './instagram-stream.js',
   './instagram-progress.js',
+  './instagram-worker-focus.js',
   './comment-accounts.js',
   './vk-settings.js',
   './helper-settings.js',
