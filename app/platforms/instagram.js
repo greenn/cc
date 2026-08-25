@@ -78,7 +78,7 @@ export const instagramAdapter = {
     };
   },
 
-  async getComments(source, cursor = source?.nextCursor) {
+  async getComments(source, cursor = source?.nextCursor, options = {}) {
     if (cursor !== null) {
       return {
         comments: [],
@@ -88,11 +88,13 @@ export const instagramAdapter = {
       };
     }
 
+    const maxClicks = Math.max(1, Number(options.maxClicks || 40));
+    const timeoutMs = Math.max(120000, Number(options.timeoutMs || 180000));
     const result = await helperRequest('instagram.collect', {
       url: helperTargetUrl(source.url),
       sourceId: source.id,
-      maxClicks: 40,
-    }, 180000);
+      maxClicks,
+    }, timeoutMs);
 
     if (result?.mediaAvailability) {
       window.dispatchEvent(new CustomEvent('cc:instagram-media-availability', {
@@ -122,6 +124,7 @@ export const instagramAdapter = {
         nextCursor: 'helper',
         hasMore: true,
         totalResults: null,
+        diagnostics: result?.diagnostics || null,
       };
     }
 
@@ -130,6 +133,7 @@ export const instagramAdapter = {
       nextCursor: null,
       hasMore: false,
       totalResults: comments.length,
+      diagnostics: result?.diagnostics || null,
     };
   },
 };
