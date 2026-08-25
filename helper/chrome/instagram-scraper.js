@@ -489,12 +489,12 @@
     }
   }
 
-  async function loadAndCollect(url, sourceId, maxClicks, requestedPassId = '') {
+  async function loadAndCollect(url, sourceId, maxClicks, requestedPassId = '', pageDownOnly = false) {
     if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
 
     const passId = String(requestedPassId || `${sourceId || 'instagram'}:${Date.now()}`);
     const streamedIds = new Set();
-    reportProgress(sourceId, { passId, phase: 'opening-comments', collected: 0, streamed: 0 }, true);
+    reportProgress(sourceId, { passId, phase: pageDownOnly ? 'page-down' : 'opening-comments', collected: 0, streamed: 0 }, true);
     const reelPanel = await openReelCommentsIfNeeded();
     const accumulator = new Map();
     await waitForInitialComments(url, sourceId, accumulator, streamedIds, passId);
@@ -513,7 +513,7 @@
 
     reportProgress(sourceId, {
       passId,
-      phase: 'collecting',
+      phase: pageDownOnly ? 'page-down' : 'collecting',
       collected: accumulator.size,
       streamed: streamedIds.size,
       clicks,
@@ -536,7 +536,7 @@
       previousSize = accumulator.size;
       let phase = 'checking';
 
-      const buttons = moreButtons();
+      const buttons = pageDownOnly ? [] : moreButtons();
       if (buttons.length && clicks < maxClicks) {
         try {
           phase = 'expanding';
@@ -576,7 +576,7 @@
           }
 
           const beforeHeight = scroller.scrollHeight;
-          const usePageDown = (steps + 1) % 7 === 0;
+          const usePageDown = pageDownOnly || (steps + 1) % 7 === 0;
           if (usePageDown) {
             phase = 'page-down';
             if (pageDownScroller(scroller)) {
@@ -641,6 +641,7 @@
       reelPage: reelPanel.reelPage,
       commentsPanelClickAttempted: reelPanel.clickAttempted,
       commentsPanelOpen: commentsPanelOpen(),
+      pageDownOnly,
       scrollMoves,
       pageDowns,
       manualScrollMoves,
@@ -676,17 +677,23 @@
       passId,
       pageUrl: location.href,
       diagnostics,
-      note: 'Comments are streamed into CC as they are discovered. Manual scrolling is noticed by the collector, and periodic PageDown-style moves are mixed with targeted comment-panel scrolling.',
+      note: pageDownOnly
+        ? 'PageDown-only mode was enabled: the helper skipped its normal direct-scroll and load-more-button strategy and used only PageDown-style movement inside the Comments scroller while continuing to stream comments into CC.'
+        : 'Comments are streamed into CC as they are discovered. Manual scrolling is noticed by the collector, and periodic PageDown-style moves are mixed with targeted comment-panel scrolling.',
     };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'CC_INSTAGRAM_COLLECT') return false;
+    const rawMaxClicks = Math.max(1, Number(message.maxClicks || 40));
+    const pageDownOnly = rawMaxClicks >= 10000;
+    const maxClicks = pageDownOnly ? Math.max(1, rawMaxClicks - 10000) : rawMaxClicks;
     loadAndCollect(
       message.url || location.href,
       message.sourceId,
-      Math.max(1, Number(message.maxClicks || 40)),
+      maxClicks,
       message.passId || '',
+      pageDownOnly,
     )
       .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
