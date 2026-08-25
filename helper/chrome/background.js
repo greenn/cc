@@ -123,9 +123,15 @@ async function getMediaAvailability(tabId) {
       sendTabMessage(tabId, { type: 'CC_INSTAGRAM_MEDIA', kind: 'video' }),
       sendTabMessage(tabId, { type: 'CC_INSTAGRAM_MEDIA', kind: 'photos' }),
     ]);
+    const videoCountRaw = Number(video?.counts?.video ?? video?.urls?.length ?? 0);
+    const photoCountRaw = Number(photos?.counts?.photos ?? photos?.urls?.length ?? 0);
+    const videoCount = Number.isFinite(videoCountRaw) ? Math.max(0, Math.floor(videoCountRaw)) : 0;
+    const photoCount = Number.isFinite(photoCountRaw) ? Math.max(0, Math.floor(photoCountRaw)) : 0;
     return {
-      video: Array.isArray(video?.urls) && video.urls.length > 0,
-      photos: Array.isArray(photos?.urls) && photos.urls.length > 0,
+      video: videoCount > 0,
+      photos: photoCount > 0,
+      videoCount,
+      photoCount,
     };
   } catch {
     return null;
