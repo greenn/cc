@@ -39,10 +39,6 @@ document.querySelector('#settings-form')?.addEventListener('submit', (event) => 
   saveSettingFromUi();
 });
 
-document.addEventListener('change', (event) => {
-  if (event.target?.id === 'instagram-pagedown-only') saveSettingFromUi();
-});
-
 if (!instagramAdapter.__ccPageDownSettingWrapped) {
   const originalGetComments = instagramAdapter.getComments.bind(instagramAdapter);
   instagramAdapter.getComments = (source, cursor, options = {}) => {
