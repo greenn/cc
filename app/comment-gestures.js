@@ -62,14 +62,23 @@ function bindCard(card) {
     if (pointerId !== event.pointerId) return;
     const didDrag = dragging;
     const finalDx = dx;
-    if (didDrag) card.__ccSuppressClick = true;
 
+    // Trigger the real card action first. The previous implementation set the
+    // click-suppression flag before button.click(), so our own capture listener
+    // swallowed that synthetic Save/Delete click and only the animation worked.
     if (finalDx >= SWIPE_THRESHOLD) {
       const save = card.querySelector('[data-action="save"]');
       if (save && !/saved/i.test(save.textContent || '')) save.click();
     } else if (finalDx <= -SWIPE_THRESHOLD) {
       const remove = card.querySelector('[data-action="delete"]');
       if (remove) remove.click();
+    }
+
+    // Suppress only the normal click Chrome may synthesize after pointerup.
+    // At this point the intended Save/Delete click has already run.
+    if (didDrag) {
+      card.__ccSuppressClick = true;
+      if (event.cancelable) event.preventDefault();
     }
 
     reset();
