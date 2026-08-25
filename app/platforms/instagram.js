@@ -1,4 +1,5 @@
 import { helperRequest } from '../helper-client.js';
+import { store } from '../store.js';
 
 function parseInstagramTarget(value) {
   const url = new URL(value);
@@ -16,14 +17,14 @@ function parseInstagramTarget(value) {
   return { externalId, kind, username };
 }
 
-function helperTargetUrl(value) {
+function helperTargetUrl(value, method = 'dom') {
   const url = new URL(value);
   // Instagram's plural /reels/<id>/ route behaves like a feed and is much
   // less stable for background comment loading. The same item has a canonical
   // single-Reel route, which is better suited for the temporary worker tab.
   url.pathname = url.pathname.replace(/^\/reels\//i, '/reel/');
   url.search = '';
-  url.hash = '';
+  url.hash = method === 'network' ? 'cc-network' : '';
   return url.toString();
 }
 
@@ -88,10 +89,14 @@ export const instagramAdapter = {
       };
     }
 
+    const settings = store.getSettings();
+    const method = options?.method === 'network' || settings.instagramCommentMethod === 'network'
+      ? 'network'
+      : 'dom';
     const maxClicks = Math.max(1, Number(options.maxClicks || 40));
-    const timeoutMs = Math.max(120000, Number(options.timeoutMs || 180000));
+    const timeoutMs = Math.max(120000, Number(options.timeoutMs || (method === 'network' ? 480000 : 180000)));
     const result = await helperRequest('instagram.collect', {
-      url: helperTargetUrl(source.url),
+      url: helperTargetUrl(source.url, method),
       sourceId: source.id,
       maxClicks,
     }, timeoutMs);
@@ -109,6 +114,7 @@ export const instagramAdapter = {
     if (!comments.length) {
       const diagnostic = result?.diagnostics || {};
       const details = [
+        diagnostic.method ? `method ${diagnostic.method}` : '',
         Number.isFinite(Number(diagnostic.commentCandidates)) ? `candidates ${diagnostic.commentCandidates}` : '',
         Number.isFinite(Number(diagnostic.timestamps)) ? `timestamps ${diagnostic.timestamps}` : '',
         diagnostic.reelPage
@@ -118,7 +124,7 @@ export const instagramAdapter = {
 
       // Zero parsed comments is not evidence that the post was deleted. Keep
       // the source refreshable and never offer destructive deletion here.
-      showCollectWarning(`Instagram returned no parsed comments${details ? ` (${details})` : ''}. The source was kept; try Refresh again if Instagram was still loading.`);
+      showCollectWarning(`Instagram returned no parsed comments${details ? ` (${details})` : ''}. The source was kept; try Refresh again or switch the Instagram collection method in Settings.`);
       return {
         comments: [],
         nextCursor: 'helper',
