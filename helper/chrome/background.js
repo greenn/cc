@@ -5,6 +5,9 @@ const CC_PAGE_PATTERNS = [
   'http://127.0.0.1/*',
 ];
 
+const workerSessions = new Map();
+const closedWorkers = new Map();
+
 function setGlobalBadge() {
   chrome.action.setBadgeText({ text: 'ON' });
   chrome.action.setBadgeBackgroundColor({ color: '#198754' });
@@ -33,18 +36,51 @@ async function injectBridgeIntoOpenCcTabs() {
   }));
 }
 
-async function broadcastHelperProgress(sourceId, progress) {
-  const tabs = await chrome.tabs.query({ url: CC_PAGE_PATTERNS });
-  await Promise.all(tabs.filter((tab) => tab.id).map((tab) => new Promise((resolve) => {
-    chrome.tabs.sendMessage(tab.id, {
-      type: 'CC_HELPER_PROGRESS',
-      sourceId: sourceId || '',
-      progress: progress || {},
-    }, () => {
-      void chrome.runtime.lastError;
-      resolve();
+function sendCcMessage(tabId, message) {
+  if (!tabId) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, message, () => {
+      const error = chrome.runtime.lastError;
+      resolve(!error);
     });
-  })));
+  });
+}
+
+async function broadcastCcMessage(message) {
+  const tabs = await chrome.tabs.query({ url: CC_PAGE_PATTERNS });
+  await Promise.all(tabs.filter((tab) => tab.id).map((tab) => sendCcMessage(tab.id, message)));
+}
+
+async function sendProgress(caller, sourceId, progress) {
+  const message = {
+    type: 'CC_HELPER_PROGRESS',
+    sourceId: sourceId || '',
+    progress: progress || {},
+  };
+  if (caller?.tabId && await sendCcMessage(caller.tabId, message)) return;
+  await broadcastCcMessage(message);
+}
+
+async function forwardWorkerProgress(workerTabId, sourceId, progress) {
+  const session = workerSessions.get(workerTabId);
+  await sendProgress(session?.caller || null, sourceId || session?.sourceId || '', progress || {});
+}
+
+async function forwardWorkerBatch(workerTabId, message) {
+  const session = workerSessions.get(workerTabId);
+  const sourceId = String(message.sourceId || session?.sourceId || '');
+  if (!sourceId) return;
+  const comments = Array.isArray(message.comments) ? message.comments : [];
+  if (session) session.streamed += comments.length;
+  const outgoing = {
+    type: 'CC_HELPER_COMMENT_BATCH',
+    sourceId,
+    passId: message.passId || session?.passId || '',
+    comments,
+    meta: message.meta || {},
+  };
+  if (session?.caller?.tabId && await sendCcMessage(session.caller.tabId, outgoing)) return;
+  await broadcastCcMessage(outgoing);
 }
 
 setGlobalBadge();
@@ -56,6 +92,26 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   setGlobalBadge();
+});
+
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  const session = workerSessions.get(tabId);
+  if (session) session.manualFocus = true;
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  const session = workerSessions.get(tabId);
+  if (!session || session.closingByHelper) return;
+  closedWorkers.set(tabId, Date.now());
+  setTimeout(() => closedWorkers.delete(tabId), 60 * 1000);
+  void sendProgress(session.caller, session.sourceId, {
+    passId: session.passId,
+    phase: 'interrupted',
+    collected: session.lastCollected || 0,
+    streamed: session.streamed || 0,
+    reason: 'worker-closed',
+    timestamp: Date.now(),
+  });
 });
 
 function waitForTabComplete(tabId, timeoutMs = 30000) {
@@ -160,9 +216,12 @@ async function decorateCollectResult(tabId, result) {
 async function collectInstagram(payload, caller) {
   if (!payload?.url) throw new Error('Instagram URL is missing.');
 
-  await broadcastHelperProgress(payload.sourceId, {
+  const passId = `${payload.sourceId || 'instagram'}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  await sendProgress(caller, payload.sourceId, {
+    passId,
     phase: 'opening',
     collected: 0,
+    streamed: 0,
     clicks: 0,
     scrollMoves: 0,
     step: 0,
@@ -170,46 +229,61 @@ async function collectInstagram(payload, caller) {
   });
 
   const tabId = await createInstagramWorkerTab(payload.url, caller);
+  workerSessions.set(tabId, {
+    caller,
+    sourceId: payload.sourceId || '',
+    passId,
+    streamed: 0,
+    lastCollected: 0,
+    manualFocus: false,
+    closingByHelper: false,
+  });
+
   await new Promise((resolve) => setTimeout(resolve, 1200));
-  await restoreCallerFocus(caller);
 
   try {
+    const request = {
+      type: 'CC_INSTAGRAM_COLLECT',
+      url: payload.url,
+      sourceId: payload.sourceId,
+      maxClicks: payload.maxClicks || 40,
+      passId,
+    };
+
     try {
-      const result = await sendTabMessage(tabId, {
-        type: 'CC_INSTAGRAM_COLLECT',
-        url: payload.url,
-        sourceId: payload.sourceId,
-        maxClicks: payload.maxClicks || 40,
-      });
-      await restoreCallerFocus(caller);
+      const result = await sendTabMessage(tabId, request);
       return await decorateCollectResult(tabId, result);
     } catch (error) {
-      await broadcastHelperProgress(payload.sourceId, {
+      if (closedWorkers.has(tabId)) {
+        throw new Error('Instagram worker tab was closed. Everything already streamed to CC was kept.');
+      }
+      await sendProgress(caller, payload.sourceId, {
+        passId,
         phase: 'retrying',
-        collected: 0,
+        collected: workerSessions.get(tabId)?.lastCollected || 0,
+        streamed: workerSessions.get(tabId)?.streamed || 0,
         clicks: 0,
         scrollMoves: 0,
         step: 0,
         maxSteps: 0,
       });
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      await restoreCallerFocus(caller);
-      const result = await sendTabMessage(tabId, {
-        type: 'CC_INSTAGRAM_COLLECT',
-        url: payload.url,
-        sourceId: payload.sourceId,
-        maxClicks: payload.maxClicks || 40,
-      });
-      await restoreCallerFocus(caller);
+      if (closedWorkers.has(tabId)) {
+        throw new Error('Instagram worker tab was closed. Everything already streamed to CC was kept.');
+      }
+      const result = await sendTabMessage(tabId, request);
       return await decorateCollectResult(tabId, result);
     }
   } finally {
+    const session = workerSessions.get(tabId);
+    if (session) session.closingByHelper = true;
     try {
       await chrome.tabs.remove(tabId);
     } catch {
       // The user may have closed the temporary tab first.
     }
-    await restoreCallerFocus(caller);
+    if (!session?.manualFocus) await restoreCallerFocus(caller);
+    workerSessions.delete(tabId);
   }
 }
 
@@ -315,7 +389,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === 'CC_INSTAGRAM_PROGRESS') {
-    void broadcastHelperProgress(message.sourceId, message.progress || {});
+    const tabId = sender.tab?.id || 0;
+    const session = workerSessions.get(tabId);
+    if (session) {
+      session.lastCollected = Math.max(session.lastCollected || 0, Number(message.progress?.collected || 0));
+    }
+    void forwardWorkerProgress(tabId, message.sourceId, message.progress || {});
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message?.type === 'CC_INSTAGRAM_COMMENT_BATCH') {
+    void forwardWorkerBatch(sender.tab?.id || 0, message);
     sendResponse({ ok: true });
     return false;
   }
@@ -326,7 +411,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     setConnectedBadge(sender.tab?.id);
 
     if (message.action === 'ping') {
-      return { version: chrome.runtime.getManifest().version, capabilities: ['instagram', 'instagram-media-download', 'instagram-progress'] };
+      return {
+        version: chrome.runtime.getManifest().version,
+        capabilities: [
+          'instagram',
+          'instagram-media-download',
+          'instagram-progress',
+          'instagram-comment-stream',
+          'instagram-manual-worker',
+        ],
+      };
     }
     if (message.action === 'instagram.collect') {
       return await collectInstagram(message.payload || {}, callerFromSender(sender));
