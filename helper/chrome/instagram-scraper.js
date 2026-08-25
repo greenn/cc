@@ -14,6 +14,106 @@
     return location.pathname.includes('/accounts/login') || Boolean(document.querySelector('input[name="username"], input[name="password"]'));
   }
 
+  function isReelPage() {
+    return /^\/reels?\//i.test(location.pathname);
+  }
+
+  function commentsPanelOpen() {
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')];
+    for (const dialog of dialogs) {
+      const headingText = [...dialog.querySelectorAll('h1, h2, h3, [role="heading"]')]
+        .map((node) => (node.textContent || '').trim())
+        .join(' ');
+      if (/comments?|комментар/i.test(headingText)) return true;
+
+      const field = dialog.querySelector('textarea, input[placeholder]');
+      const placeholder = field?.getAttribute('placeholder') || '';
+      if (/comment|комментар/i.test(placeholder)) return true;
+    }
+
+    return [...document.querySelectorAll('textarea, input[placeholder]')].some((field) => {
+      const placeholder = field.getAttribute('placeholder') || '';
+      if (!/comment|комментар/i.test(placeholder)) return false;
+      const rect = field.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+  }
+
+  function visibleClickable(node) {
+    const clickable = node?.closest?.('button, [role="button"], a[href]');
+    if (!clickable) return null;
+    const rect = clickable.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const style = getComputedStyle(clickable);
+    if (style.visibility === 'hidden' || style.display === 'none') return null;
+    return clickable;
+  }
+
+  function commentActionButton() {
+    const candidates = [];
+    const seen = new Set();
+    const push = (node) => {
+      const clickable = visibleClickable(node);
+      if (!clickable || seen.has(clickable)) return;
+      seen.add(clickable);
+      candidates.push(clickable);
+    };
+
+    document.querySelectorAll('[aria-label], [title]').forEach((node) => {
+      const label = `${node.getAttribute('aria-label') || ''} ${node.getAttribute('title') || ''}`.trim();
+      if (!label || /add (?:a )?comment|добавить комментар/i.test(label)) return;
+      if (/^(?:view )?comments?$|^comment$|комментари|комментировать/i.test(label)) push(node);
+    });
+
+    document.querySelectorAll('svg[aria-label]').forEach((node) => {
+      const label = node.getAttribute('aria-label') || '';
+      if (/^(?:view )?comments?$|^comment$|комментари|комментировать/i.test(label)) push(node);
+    });
+
+    document.querySelectorAll('a[href]').forEach((anchor) => {
+      const href = anchor.getAttribute('href') || '';
+      if (/\/comments?\/?(?:[?#]|$)/i.test(href)) push(anchor);
+    });
+
+    return candidates[0] || null;
+  }
+
+  async function openReelCommentsIfNeeded(timeoutMs = 7000) {
+    if (!isReelPage()) {
+      return { reelPage: false, clickAttempted: false, opened: commentsPanelOpen() };
+    }
+
+    if (commentsPanelOpen()) {
+      return { reelPage: true, clickAttempted: false, opened: true };
+    }
+
+    const deadline = Date.now() + timeoutMs;
+    let clickAttempted = false;
+
+    while (Date.now() < deadline) {
+      if (commentsPanelOpen()) return { reelPage: true, clickAttempted, opened: true };
+
+      const action = commentActionButton();
+      if (action) {
+        clickAttempted = true;
+        try {
+          action.scrollIntoView({ block: 'center', inline: 'nearest' });
+          await sleep(120);
+          action.click();
+          await sleep(900);
+          if (commentsPanelOpen()) return { reelPage: true, clickAttempted, opened: true };
+        } catch {
+          // Instagram can replace the action element while the Reel UI settles.
+          // Keep looking until the timeout rather than failing immediately.
+        }
+      }
+
+      await sleep(350);
+    }
+
+    return { reelPage: true, clickAttempted, opened: commentsPanelOpen() };
+  }
+
   function profileAnchor(node) {
     return [...node.querySelectorAll('a[href]')].find((anchor) => {
       const href = anchor.getAttribute('href') || '';
@@ -101,10 +201,6 @@
     const hasPermalink = Boolean(commentPermalink(node));
     if (!hasTime && !hasPermalink) return Infinity;
 
-    // A timestamp/permalink often sits in a tiny metadata sub-container. The
-    // old scorer selected that container even though the actual comment text
-    // lived one or two ancestors higher. Require meaningful non-UI text before
-    // accepting a candidate, then strongly prefer containers with few profiles.
     const text = cleanCandidateText(node, username);
     if (!text || text.length < 2) return Infinity;
 
@@ -274,6 +370,7 @@
   async function loadAndCollect(url, sourceId, maxClicks) {
     if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
 
+    const reelPanel = await openReelCommentsIfNeeded();
     await waitForInitialComments(url, sourceId);
 
     let previousCount = -1;
@@ -314,6 +411,9 @@
       parsedComments: comments.length,
       loadButtons: moreButtons().length,
       loggedOut: isLoggedOut(),
+      reelPage: reelPanel.reelPage,
+      commentsPanelClickAttempted: reelPanel.clickAttempted,
+      commentsPanelOpen: commentsPanelOpen(),
     };
 
     return {
