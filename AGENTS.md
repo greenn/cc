@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.4.14`.
+Current baseline version: `0.5.1`.
 
 Rules:
 
@@ -19,10 +19,10 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.4.14`;
-- another change on the same day: `0.4.15`;
-- the first change on the next active development day: `0.5.1`;
-- the next change that same new day: `0.5.2`.
+- current version: `0.5.1`;
+- another change on the same day: `0.5.2`;
+- the first change on the next active development day: `0.6.1`;
+- the next change that same new day: `0.6.2`.
 
 For every version bump:
 
@@ -75,6 +75,7 @@ These are default product conventions for applications we build:
 - Horizontal gesture on a comment: drag/swipe right to Save, left to Delete.
 - Keep vertical scrolling natural and preserve mouse text selection inside comment text; mouse drag can start from the rest of the card.
 - A Save gesture must not toggle an already-saved comment back to unsaved.
+- Gesture click suppression must only suppress the browser's follow-up click after `pointerup`; never set the suppression flag before invoking the intended Save/Delete action, or the gesture will animate without changing state.
 
 ## Avatar loading policy
 
