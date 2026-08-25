@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.22`.
+Current baseline version: `0.5.24`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.22`;
-- another change on the same day: `0.5.23`;
+- current version: `0.5.24`;
+- another change on the same day: `0.5.25`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -73,6 +73,7 @@ These are default product conventions for applications we build:
 - If the user manually activates the helper-created Instagram worker tab, allow that manual interaction. Do not yank focus back to CC while the user is helping the worker by scrolling.
 - Manual user scrolling in the worker tab is valid input: the collector keeps rescanning the currently rendered comment DOM and incorporates comments revealed by the user's movement.
 - While Refresh or Load more is running for the current Instagram source, expose an `Open worker` action beside the source controls. It focuses the already-created temporary worker tab for that source; it must never create an additional Instagram tab. If the worker is still opening, the helper may wait briefly for it to register. Once the user focuses the worker this way, treat it as manual focus and let the user stay on that tab until the worker finishes or is closed.
+- Instagram Helper diagnostics and worker controls (`Helper · found/saved/...`, `Refresh`, `Load more`, `Open worker`) live in their own dedicated row directly below the main source-action row. Content/data actions such as Accounts, Attachments, Video, Photos, and Delete source remain in the main row.
 - Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
 - A zero-comment scrape is not proof that the Instagram source was deleted. Keep the source and leave Refresh available; do not offer destructive deletion based only on missing rendered comment markup.
 - For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
@@ -91,6 +92,7 @@ These are default product conventions for applications we build:
 - Reel media counts represent logical media in that Reel, not every media/resource request made by the Instagram page. A normal single-video Reel should report one video and zero photos; never count CDN/resource-timing requests as separate Reel videos.
 - Instagram operations are tracked per source, not globally. Different Instagram sources may run Refresh/media operations concurrently, with one independent temporary Browser Helper worker tab per request. Prevent duplicate execution of the same operation on the same source while it is already running.
 - While an Instagram Refresh/Load more/Video/Photos operation is active, show only a compact animated 3px diagonal black/white bar along the bottom of the initiating action and the corresponding source item in the left list. Navigating to another source must not stop the background operation or lose its processing marker.
+- The open Instagram source has an explicit `Delete source` action. It deletes only the CC source and its locally stored comments, never the Instagram post itself; disable the action while a Helper operation for that source is still running.
 
 ## Comment media
 
@@ -100,12 +102,16 @@ These are default product conventions for applications we build:
 - Instagram attachment detection should inspect normal images, `srcset`/`picture` media, CSS/`role=img` backgrounds, video/source elements, and direct media links found inside that verified comment container.
 - Exclude the comment author's avatar from attachment detection. Prefer media that belongs to the comment container itself; do not treat the Reel/post media or unrelated Instagram UI assets as comment attachments.
 - Direct media URLs such as Instagram/Facebook CDN `.gif`, `.webp`, `.jpg`, `.png`, `.mp4`, etc. count as attachments even when the media element has no `alt` text and dimensions are not yet available.
+- Empty/missing media attributes are not URLs. Never call URL resolution on an empty attachment value with the Reel/post page as the base; otherwise an empty CSS background/image value becomes the Reel URL itself.
+- The Helper must read raw media attributes (`getAttribute('src')`, `getAttribute('poster')`) where appropriate instead of relying on DOM properties that may synthesize the current document URL for missing values.
+- CC performs a second validation before persistence/rendering: an Instagram attachment must resolve to a direct media file URL of the expected image/video type. Instagram Reel/post page URLs are rejected and removed from existing local state on reload.
 - Normalize attachment identity using the media URL origin + pathname, without temporary query parameters, so expiring CDN signatures do not create a new comment ID on every refresh.
 - If Instagram does not expose a true permalink for a comment, leave `originalUrl` empty. Never substitute the Reel/post URL and label it as the original comment.
 - New verified Instagram comments mark their attachment set with `attachmentScope: 'comment'`. CC only renders/counts Instagram attachments carrying this verified scope, so older false Reel/post attachments disappear from the inline list and `Attachments` gallery until the actual comment is refreshed.
 - For a verified Instagram comment, the incoming attachment set is authoritative and replaces older stored attachments for that comment. This allows a corrected refresh to remove previously misclassified Reel/post media.
 - A comment with no meaningful text is still valid when it contains a detected attachment.
 - Render collected comment attachments directly under the comment text. Images/GIFs are lazy-loaded and open their actual media URL; video attachments use native controls when a direct HTTP media URL is available. If Instagram exposes only a video poster/preview, show that preview and link back to the original comment only when a true comment permalink exists.
+- The DOM renderer must not expose its internal attachment render-cache signature as a `data-signature` attribute. Keep render signatures in JavaScript memory (for example a `WeakMap`) so inspected comment HTML contains only meaningful attachment markup.
 - When a source is open, expose an `Attachments · N` action in the source header. It opens a gallery containing every verified collected comment attachment for that source, with author, comment snippet, and true original-comment link when available.
 - Store attachment URLs/previews with the comment in CC local data. Do not mirror comment attachments to the PHP backend unless that storage policy is explicitly changed later.
 - Instagram CDN attachment URLs may expire; if that becomes a practical problem, add an explicit local/helper caching layer rather than silently duplicating all media by default.
