@@ -9,13 +9,28 @@
   window.postMessage({ source: 'cc-helper', type: 'CC_HELPER_READY', version: chrome.runtime.getManifest().version }, '*');
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type !== 'CC_HELPER_PROGRESS') return false;
-    window.postMessage({
-      source: 'cc-helper',
-      type: 'CC_HELPER_PROGRESS',
-      sourceId: message.sourceId || '',
-      progress: message.progress || {},
-    }, '*');
+    if (message?.type === 'CC_HELPER_PROGRESS') {
+      window.postMessage({
+        source: 'cc-helper',
+        type: 'CC_HELPER_PROGRESS',
+        sourceId: message.sourceId || '',
+        progress: message.progress || {},
+      }, '*');
+      return false;
+    }
+
+    if (message?.type === 'CC_HELPER_COMMENT_BATCH') {
+      window.postMessage({
+        source: 'cc-helper',
+        type: 'CC_HELPER_COMMENT_BATCH',
+        sourceId: message.sourceId || '',
+        passId: message.passId || '',
+        comments: Array.isArray(message.comments) ? message.comments : [],
+        meta: message.meta || {},
+      }, '*');
+      return false;
+    }
+
     return false;
   });
 
