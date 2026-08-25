@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.18`.
+Current baseline version: `0.5.19`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.18`;
-- another change on the same day: `0.5.19`;
+- current version: `0.5.19`;
+- another change on the same day: `0.5.20`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -77,6 +77,7 @@ These are default product conventions for applications we build:
 - For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
 - Reel comment collection should open the Comments panel if necessary, then accumulate parsed comments while clicking load/reply controls and scrolling the comments panel. Do not return only the final currently-rendered DOM viewport because Instagram can virtualize the list.
 - Mix targeted comment-container scrolling with periodic PageDown-style movement. A synthetic PageDown event may be sent for page handlers, but always pair it with an explicit page-sized scroll of the comments container because synthetic keyboard events do not reliably trigger browser-native scrolling.
+- Settings includes an experimental `PageDown only` mode for Instagram. When enabled, Refresh/Load more skip the normal direct-scroll and load-more-button strategy and use only PageDown-style page-sized movement inside the detected Comments scroller. Keep the setting local to CC and apply it to both Refresh and Load more. This mode is primarily for testing Instagram's own lazy-loading behavior and works best while the temporary worker tab is actually focused; do not claim a synthetic PageDown is equivalent to a trusted physical keypress in an unfocused tab.
 - During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments found in the current helper pass, how many have already been streamed and persisted by CC, the current phase, and crawl step.
 - Stream discovered comments to CC immediately in small batches instead of keeping the entire result only inside the worker tab until the end. CC must upsert each incoming batch synchronously into local storage.
 - If the user closes the temporary worker tab early, all batches that were already streamed to CC remain saved. Losing the worker must not roll back already persisted comments; the operation should end with an explicit interrupted/worker-closed message.
