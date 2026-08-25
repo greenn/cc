@@ -121,6 +121,7 @@ export const store = {
 
   upsertComments(sourceId, incoming) {
     const existing = state.comments[sourceId] || [];
+    const source = state.sources.find((item) => item.id === sourceId) || null;
     const byPlatformId = new Map(existing.map((comment) => [comment.platformCommentId, comment]));
     const byInstagramFallback = new Map(existing
       .map((comment) => [instagramFallbackKey(comment), comment])
@@ -131,7 +132,11 @@ export const store = {
       const old = byPlatformId.get(next.platformCommentId)
         || (fallbackKey ? byInstagramFallback.get(fallbackKey) : null);
       if (old) {
-        const attachments = mergeAttachments(old.attachments, next.attachments);
+        const authoritativeInstagramAttachments = source?.platform === 'instagram'
+          && next.attachmentScope === 'comment';
+        const attachments = authoritativeInstagramAttachments
+          ? mergeAttachments([], next.attachments)
+          : mergeAttachments(old.attachments, next.attachments);
         Object.assign(old, next, {
           attachments,
           read: old.read,
