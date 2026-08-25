@@ -31,8 +31,10 @@ function phaseLabel(phase) {
     checking: 'checking',
     expanding: 'opening more',
     scrolling: 'scrolling',
+    'page-down': 'PageDown',
     'waiting-more': 'waiting for more',
     'waiting-panel': 'waiting for panel',
+    interrupted: 'worker closed',
     complete: 'finishing',
   };
   return labels[phase] || String(phase || 'working');
@@ -79,27 +81,25 @@ function ensureChip() {
   return chip;
 }
 
-function progressText(progress) {
-  const collected = Math.max(0, Number(progress?.collected || 0));
-  const step = Math.max(0, Number(progress?.step || 0));
-  const maxSteps = Math.max(0, Number(progress?.maxSteps || 0));
-  const phase = phaseLabel(progress?.phase);
-  return maxSteps > 0
-    ? `Helper · ${collected} comments · ${phase} ${step}/${maxSteps}`
-    : `Helper · ${collected} comments · ${phase}`;
-}
-
 function progressTitle(progress) {
   const collected = Math.max(0, Number(progress?.collected || 0));
+  const saved = Math.max(0, Number(progress?.saved || 0));
+  const newSaved = Math.max(0, Number(progress?.newSaved || 0));
   const clicks = Math.max(0, Number(progress?.clicks || 0));
   const scrollMoves = Math.max(0, Number(progress?.scrollMoves || 0));
+  const pageDowns = Math.max(0, Number(progress?.pageDowns || 0));
+  const manualScrollMoves = Math.max(0, Number(progress?.manualScrollMoves || 0));
   const stableRounds = Math.max(0, Number(progress?.stableRounds || 0));
   const stableLimit = Math.max(0, Number(progress?.stableLimit || 0));
   return [
-    `${collected} comments collected in this helper pass`,
+    `${collected} unique comments found in this helper pass`,
+    `${saved} comments already streamed and persisted by CC`,
+    `${newSaved} of them were new to the local source`,
     `phase: ${phaseLabel(progress?.phase)}`,
     `load/expand clicks: ${clicks}`,
     `scroll moves: ${scrollMoves}`,
+    `PageDown-style moves: ${pageDowns}`,
+    `external/manual scroll changes noticed: ${manualScrollMoves}`,
     stableLimit ? `stable checks: ${stableRounds}/${stableLimit}` : '',
   ].filter(Boolean).join('\n');
 }
@@ -119,7 +119,9 @@ function renderSourceBadge(sourceId, progress, operation) {
   if (!badge) return;
 
   const label = operation === 'more' ? 'Load more' : 'Refresh';
-  badge.textContent = `${label} · ${Math.max(0, Number(progress.collected || 0))}`;
+  const found = Math.max(0, Number(progress.collected || 0));
+  const saved = Math.max(0, Number(progress.saved || 0));
+  badge.textContent = `${label} · ${found}/${saved}`;
   badge.title = progressTitle(progress);
 }
 
@@ -132,7 +134,11 @@ function render() {
   if (chip) {
     chip.hidden = !(currentProgress && operation);
     if (currentProgress && operation) {
-      chip.innerHTML = `Helper · <strong>${Math.max(0, Number(currentProgress.collected || 0))}</strong> comments · ${phaseLabel(currentProgress.phase)}${Number(currentProgress.maxSteps || 0) > 0 ? ` ${Math.max(0, Number(currentProgress.step || 0))}/${Math.max(0, Number(currentProgress.maxSteps || 0))}` : ''}`;
+      const found = Math.max(0, Number(currentProgress.collected || 0));
+      const saved = Math.max(0, Number(currentProgress.saved || 0));
+      const step = Math.max(0, Number(currentProgress.step || 0));
+      const maxSteps = Math.max(0, Number(currentProgress.maxSteps || 0));
+      chip.innerHTML = `Helper · found <strong>${found}</strong> · saved <strong>${saved}</strong> · ${phaseLabel(currentProgress.phase)}${maxSteps > 0 ? ` ${step}/${maxSteps}` : ''}`;
       chip.title = progressTitle(currentProgress);
     }
   }
@@ -160,8 +166,12 @@ function watchUntilOperationEnds(sourceId) {
     }
     clearInterval(timer);
     watchers.delete(sourceId);
-    progressBySource.delete(sourceId);
-    render();
+    window.setTimeout(() => {
+      if (!activeOperation(sourceId)) {
+        progressBySource.delete(sourceId);
+        render();
+      }
+    }, 1200);
   }, 300);
   watchers.set(sourceId, timer);
 }
@@ -172,7 +182,30 @@ window.addEventListener('message', (event) => {
   if (!message || message.source !== 'cc-helper' || message.type !== 'CC_HELPER_PROGRESS') return;
   const sourceId = String(message.sourceId || '');
   if (!sourceId) return;
-  progressBySource.set(sourceId, { ...(message.progress || {}) });
+  const previous = progressBySource.get(sourceId) || {};
+  const next = { ...previous, ...(message.progress || {}) };
+  if (previous.passId && next.passId && previous.passId !== next.passId) {
+    next.saved = 0;
+    next.newSaved = 0;
+  }
+  progressBySource.set(sourceId, next);
+  watchUntilOperationEnds(sourceId);
+  render();
+});
+
+window.addEventListener('cc:instagram-stream-saved', (event) => {
+  const detail = event.detail || {};
+  const sourceId = String(detail.sourceId || '');
+  if (!sourceId) return;
+  const previous = progressBySource.get(sourceId) || {};
+  const passId = String(detail.passId || previous.passId || '');
+  progressBySource.set(sourceId, {
+    ...previous,
+    passId,
+    saved: Math.max(0, Number(detail.received || 0)),
+    newSaved: Math.max(0, Number(detail.added || 0)),
+    storedTotal: Math.max(0, Number(detail.storedTotal || 0)),
+  });
   watchUntilOperationEnds(sourceId);
   render();
 });
@@ -186,4 +219,4 @@ window.addEventListener('popstate', () => requestAnimationFrame(render));
 
 ensureChip();
 render();
-console.info('[CC Instagram progress] live helper collection counters ready');
+console.info('[CC Instagram progress] live found/saved counters ready');
