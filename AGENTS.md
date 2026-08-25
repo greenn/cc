@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.11`.
+Current baseline version: `0.5.12`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.11`;
-- another change on the same day: `0.5.12`;
+- current version: `0.5.12`;
+- another change on the same day: `0.5.13`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -71,13 +71,15 @@ These are default product conventions for applications we build:
 - Do not navigate or reuse the user's existing Instagram tabs for a scrape.
 - A helper-created temporary Instagram tab should be closed after the scrape completes.
 - Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
-- For Instagram Reel/Reels pages, comments can be closed behind the comment action. Before scraping a Reel, the helper should detect that state and click the visible Comment action to open the comments panel, then wait for the panel/comments to render before parsing.
-- When a refresh returns zero candidates, zero permalinks, and zero timestamps, do not claim with certainty that the post was deleted. It may be deleted/unavailable or Instagram may not have exposed usable markup. Offer the user a confirmation to remove that source from CC.
+- A zero-comment scrape is not proof that the Instagram source was deleted. Keep the source and leave Refresh available; do not offer destructive deletion based only on missing rendered comment markup.
+- For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
+- Reel comment collection should open the Comments panel if necessary, then accumulate parsed comments while clicking load/reply controls and scrolling the comments panel. Do not return only the final currently-rendered DOM viewport because Instagram can virtualize the list.
 - Instagram media downloads are explicit user actions only. Save requested video/photos to the local Chrome Downloads folder under `CC/Instagram/...`; do not mirror media to the PHP backend by default.
 - Keep downloaded-media metadata in the CC source so the app can show downloaded items above Comments and reopen them through the Browser Helper.
 - After an Instagram Refresh/media probe, retain detected `videoCount` and `photoCount` in the source. Media action buttons show `?` until the count is known, then show the detected count; a known zero disables that media action instead of silently hiding the information.
+- Reel media counts represent logical media in that Reel, not every media/resource request made by the Instagram page. A normal single-video Reel should report one video and zero photos; never count CDN/resource-timing requests as separate Reel videos.
 - Instagram operations are tracked per source, not globally. Different Instagram sources may run Refresh/media operations concurrently, with one independent temporary Browser Helper worker tab per request. Prevent duplicate execution of the same operation on the same source while it is already running.
-- While an Instagram Refresh/Video/Photos operation is active, mark the initiating action and its source in the left list with an animated 3px black/white diagonal stripe along the bottom edge. Do not cover the whole button/source row with the loading texture. Navigating to another source must not stop the background operation or lose its processing marker.
+- While an Instagram Refresh/Video/Photos operation is active, show only a compact animated 3px diagonal black/white bar along the bottom of the initiating action and the corresponding source item in the left list. Navigating to another source must not stop the background operation or lose its processing marker.
 
 ## Saved/highlighted comment flow
 
