@@ -25,6 +25,7 @@ function legend(enabled = readEnabled()) {
     `Shortcuts ${enabled ? 'ON' : 'OFF'}`,
     '← Delete comment',
     '→ Save comment',
+    'Enter Highlight comment',
     '↑ Previous comment',
     '↓ Next comment',
     'Target: selected comment; otherwise the top visible comment',
@@ -76,6 +77,10 @@ function isEditableTarget(target) {
   if (!(target instanceof Element)) return false;
   if (target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return true;
   return Boolean(target.closest('dialog[open]'));
+}
+
+function isInteractiveTarget(target) {
+  return target instanceof Element && Boolean(target.closest('button, a[href], summary, [role="button"]'));
 }
 
 function commentCards() {
@@ -130,6 +135,13 @@ function performAction(action) {
     const save = card.querySelector('[data-action="save"]');
     if (!save) return false;
     if (!/saved/i.test(save.textContent || '')) save.click();
+    return true;
+  }
+
+  if (action === 'highlight') {
+    const highlight = card.querySelector('[data-action="highlight"]');
+    if (!highlight) return false;
+    if (!card.classList.contains('is-highlighted')) highlight.click();
     return true;
   }
 
@@ -192,10 +204,12 @@ document.addEventListener('keydown', (event) => {
   if (!isEnabled()) return;
   if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   if (isEditableTarget(event.target)) return;
+  if (event.key === 'Enter' && isInteractiveTarget(event.target)) return;
 
   let handled = false;
   if (event.key === 'ArrowLeft') handled = performAction('delete');
   if (event.key === 'ArrowRight') handled = performAction('save');
+  if (event.key === 'Enter') handled = performAction('highlight');
   if (event.key === 'ArrowUp') handled = navigateComments(-1);
   if (event.key === 'ArrowDown') handled = navigateComments(1);
 
