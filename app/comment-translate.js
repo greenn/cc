@@ -2,9 +2,16 @@ import { store } from './store.js';
 
 const commentsList = document.querySelector('#comments-list');
 const statusBanner = document.querySelector('#status-banner');
-const TARGET_LANGUAGE = 'ru';
 const translatorCache = new Map();
 let detectorPromise = null;
+
+function targetLanguage() {
+  return String(store.getSettings().translationTargetLanguage || 'ru').toLowerCase();
+}
+
+function targetLabel() {
+  return targetLanguage() === 'ru' ? 'Russian' : targetLanguage().toUpperCase();
+}
 
 function showStatus(message, kind = 'info') {
   if (!statusBanner) return;
@@ -55,7 +62,7 @@ function renderCardTranslation(card) {
   textNode.style.whiteSpace = 'pre-line';
   button.classList.toggle('is-active', shown);
   button.setAttribute('aria-pressed', shown ? 'true' : 'false');
-  button.title = shown ? 'Show original text' : 'Translate this comment to Russian';
+  button.title = shown ? 'Show original text' : `Translate this comment to ${targetLabel()}`;
 }
 
 function setButtonProgress(button, label) {
@@ -97,19 +104,20 @@ async function getTranslator(sourceLanguage, button) {
     throw new Error('Chrome Translator API is not available in this browser.');
   }
 
-  const key = `${sourceLanguage}>${TARGET_LANGUAGE}`;
+  const target = targetLanguage();
+  const key = `${sourceLanguage}>${target}`;
   if (!translatorCache.has(key)) {
     const availability = await Translator.availability({
       sourceLanguage,
-      targetLanguage: TARGET_LANGUAGE,
+      targetLanguage: target,
     });
     if (availability === 'unavailable') {
-      throw new Error(`Chrome cannot translate ${sourceLanguage} → Russian on this device.`);
+      throw new Error(`Chrome cannot translate ${sourceLanguage} → ${targetLabel()} on this device.`);
     }
 
     const promise = Translator.create({
       sourceLanguage,
-      targetLanguage: TARGET_LANGUAGE,
+      targetLanguage: target,
       monitor(monitor) {
         monitor.addEventListener('downloadprogress', (event) => {
           const percent = Math.round(Number(event.loaded || 0) * 100);
@@ -129,7 +137,7 @@ async function translateComment(card, button) {
   const found = commentForCard(card);
   if (!found) return;
 
-  // Once translated, the button is a simple Russian/original toggle. The
+  // Once translated, the button is a simple target/original toggle. The
   // translation itself remains cached in the comment's local CC state.
   if (found.comment.translationRu) {
     store.updateComment(found.sourceId, found.commentId, {
@@ -145,9 +153,10 @@ async function translateComment(card, button) {
 
   try {
     const sourceLanguage = await detectLanguage(found.comment.text, button);
+    const target = targetLanguage();
     let translated = found.comment.text;
 
-    if (!sourceLanguage.startsWith('ru')) {
+    if (!sourceLanguage.startsWith(target)) {
       const translator = await getTranslator(sourceLanguage, button);
       translated = await translator.translate(found.comment.text);
     }
@@ -155,13 +164,14 @@ async function translateComment(card, button) {
     store.updateComment(found.sourceId, found.commentId, {
       translationRu: translated,
       translationSourceLanguage: sourceLanguage,
+      translationTargetLanguage: target,
       translationShown: true,
       translatedAt: new Date().toISOString(),
     });
     renderCardTranslation(card);
   } catch (error) {
     console.error('[CC translate] failed', error);
-    showStatus(error?.message || 'Could not translate this comment to Russian.', 'error');
+    showStatus(error?.message || `Could not translate this comment to ${targetLabel()}.`, 'error');
   } finally {
     button.disabled = false;
     setButtonProgress(button, originalLabel);
@@ -203,4 +213,4 @@ if (commentsList) {
 }
 bindAll();
 
-console.info('[CC translate] per-comment Russian translation toggle ready');
+console.info('[CC translate] configured per-comment local translation toggle ready');
