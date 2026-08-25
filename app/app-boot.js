@@ -1,4 +1,4 @@
-const VERSION = '0.5.1';
+const VERSION = '0.5.2';
 
 const modules = [
   './boot-route.js',
@@ -13,6 +13,7 @@ const modules = [
   './transcript.js',
   './comment-ui.js',
   './comment-gestures.js',
+  './comment-translate.js',
 ];
 
 const loadedModules = window.__CC_LOADED_MODULES__ ||= new Set();
