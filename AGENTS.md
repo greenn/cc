@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.27`.
+Current baseline version: `0.5.28`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.27`;
-- another change on the same day: `0.5.28`;
+- current version: `0.5.28`;
+- another change on the same day: `0.5.29`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -150,6 +150,10 @@ These are default product conventions for applications we build:
 - Normal working feeds are `Comments`, global `All comments`, `Unread`, and `Read`; they show only non-deleted comments that are not Saved.
 - Saved comments remain available through the per-source `Saved` filter and the global `Saved` view.
 - Deleted comments remain available through `Deleted` and are excluded from Saved views while deleted.
+- Opening either Saved or Deleted from normal UI navigation defaults the sort to the corresponding action time descending: most recently saved first in Saved, most recently deleted first in Deleted.
+- In Saved, the `Newest`/`Oldest` date directions use `savedAt` (falling back to highlight/publish time only for older records missing the state timestamp). In Deleted they use `deletedAt` (falling back to publish time for older records missing it).
+- Saved and Deleted keep the normal sort menu. Their date options are relabeled contextually (`Recently saved` / `Saved earliest`, `Recently deleted` / `Deleted earliest`), while the other existing sorts remain available.
+- Explicit URL sort state is preserved for Back/Forward/direct links; only a fresh user navigation into Saved/Deleted resets to the newest state-action time.
 - If Save/Highlight/Delete removes the current card from the rendered feed, preserve its list-position anchor so keyboard navigation continues from that position instead of jumping back to the top.
 
 ## Comment gestures
