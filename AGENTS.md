@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.4`.
+Current baseline version: `0.5.5`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.4`;
-- another change on the same day: `0.5.5`;
+- current version: `0.5.5`;
+- another change on the same day: `0.5.6`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -81,6 +81,16 @@ These are default product conventions for applications we build:
 - Keep vertical scrolling natural and preserve mouse text selection inside comment text; mouse drag can start from the rest of the card.
 - A Save gesture must not toggle an already-saved comment back to unsaved.
 - Gesture click suppression must only suppress the browser's follow-up click after `pointerup`; never set the suppression flag before invoking the intended Save/Delete action, or the gesture will animate without changing state.
+
+## Comment keyboard shortcuts
+
+- A `Shortcuts` toggle lives directly below Settings in the left panel.
+- The toggle state is stored locally in CC settings and survives reloads.
+- Its tooltip shows the keyboard legend and target-selection rule.
+- When enabled: `ArrowLeft` performs Delete (same action as a left swipe) and `ArrowDown` performs Save (the other swipe action).
+- Shortcut actions target the selected comment first; if no comment is selected, target the top visible comment in the comments viewport.
+- Do not hijack arrow keys while the user is typing/editing in an input, textarea, select, contenteditable element, or an open dialog.
+- Save via shortcut must not unsave an already-saved comment.
 
 ## Comment translation
 
