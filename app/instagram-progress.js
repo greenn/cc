@@ -89,6 +89,8 @@ function progressTitle(progress) {
   const scrollMoves = Math.max(0, Number(progress?.scrollMoves || 0));
   const pageDowns = Math.max(0, Number(progress?.pageDowns || 0));
   const manualScrollMoves = Math.max(0, Number(progress?.manualScrollMoves || 0));
+  const domPruned = Math.max(0, Number(progress?.domPruned || 0));
+  const domPruneThreshold = Math.max(0, Number(progress?.domPruneThreshold || 0));
   const stableRounds = Math.max(0, Number(progress?.stableRounds || 0));
   const stableLimit = Math.max(0, Number(progress?.stableLimit || 0));
   return [
@@ -96,6 +98,8 @@ function progressTitle(progress) {
     `${saved} comments already streamed and persisted by CC`,
     `${newSaved} of them were new to the local source`,
     `phase: ${phaseLabel(progress?.phase)}`,
+    domPruned ? `${domPruned} old Instagram comment DOM blocks cleared after collection` : '',
+    domPruneThreshold ? `DOM pruning starts after more than ${domPruneThreshold} collected comments` : '',
     `load/expand clicks: ${clicks}`,
     `scroll moves: ${scrollMoves}`,
     `PageDown-style moves: ${pageDowns}`,
@@ -136,9 +140,10 @@ function render() {
     if (currentProgress && operation) {
       const found = Math.max(0, Number(currentProgress.collected || 0));
       const saved = Math.max(0, Number(currentProgress.saved || 0));
+      const domPruned = Math.max(0, Number(currentProgress.domPruned || 0));
       const step = Math.max(0, Number(currentProgress.step || 0));
       const maxSteps = Math.max(0, Number(currentProgress.maxSteps || 0));
-      chip.innerHTML = `Helper · found <strong>${found}</strong> · saved <strong>${saved}</strong> · ${phaseLabel(currentProgress.phase)}${maxSteps > 0 ? ` ${step}/${maxSteps}` : ''}`;
+      chip.innerHTML = `Helper · found <strong>${found}</strong> · saved <strong>${saved}</strong>${domPruned ? ` · DOM −<strong>${domPruned}</strong>` : ''} · ${phaseLabel(currentProgress.phase)}${maxSteps > 0 ? ` ${step}/${maxSteps}` : ''}`;
       chip.title = progressTitle(currentProgress);
     }
   }
@@ -219,4 +224,4 @@ window.addEventListener('popstate', () => requestAnimationFrame(render));
 
 ensureChip();
 render();
-console.info('[CC Instagram progress] live found/saved counters ready');
+console.info('[CC Instagram progress] live found/saved/DOM-pruned counters ready');
