@@ -141,6 +141,11 @@
   }
 
   function prune() {
+    // Normal path: the sendMessage hook gives us the exact number of unique
+    // comments that the scraper already streamed. Avoid touching/scanning the
+    // Instagram DOM at all until that count passes the pruning threshold.
+    if (sendMessageHooked && streamedCommentIds.size <= PRUNE_AFTER_COLLECTED) return;
+
     const root = commentsDialog();
     if (!root) return;
 
