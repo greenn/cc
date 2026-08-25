@@ -24,7 +24,7 @@ function ensureStyle() {
       text-decoration:none;
     }
     .comment-attachment img,
-    .comment-attachment video {
+    video.comment-attachment {
       display:block;
       width:auto;
       max-width:100%;
