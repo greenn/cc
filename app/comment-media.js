@@ -115,6 +115,9 @@ function safeAttachment(value) {
 }
 
 function attachmentsFor(comment) {
+  const source = comment?.sourceId ? store.getSource(comment.sourceId) : null;
+  if (source?.platform === 'instagram' && comment?.attachmentScope !== 'comment') return [];
+
   const seen = new Set();
   const result = [];
   for (const raw of Array.isArray(comment?.attachments) ? comment.attachments : []) {
@@ -149,21 +152,25 @@ function makeInlineMedia(comment, item) {
     return media;
   }
 
-  const href = item.url || comment.originalUrl || item.previewUrl;
-  const link = document.createElement('a');
-  link.className = `comment-attachment${item.type === 'video' ? ' is-video-preview' : ''}`;
-  link.href = href;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  link.title = item.type === 'video' ? 'Open original comment video' : (item.alt || 'Open comment image');
+  const href = item.type === 'video'
+    ? safeHttpUrl(comment.originalUrl)
+    : (item.url || item.previewUrl);
+  const wrapper = href ? document.createElement('a') : document.createElement('div');
+  wrapper.className = `comment-attachment${item.type === 'video' ? ' is-video-preview' : ''}`;
+  if (href) {
+    wrapper.href = href;
+    wrapper.target = '_blank';
+    wrapper.rel = 'noopener noreferrer';
+  }
+  wrapper.title = item.type === 'video' ? 'Open original comment video' : (item.alt || 'Open comment image');
 
   const image = document.createElement('img');
   image.src = item.previewUrl || item.url;
   image.alt = item.alt || '';
   image.loading = 'lazy';
   image.decoding = 'async';
-  link.appendChild(image);
-  return link;
+  wrapper.appendChild(image);
+  return wrapper;
 }
 
 function renderCard(card) {
@@ -200,7 +207,7 @@ function ensureUi() {
     button.className = 'ghost-action';
     button.textContent = 'Attachments · 0';
     button.hidden = true;
-    button.title = 'Show all media collected from comments in this source';
+    button.title = 'Show all verified media collected from comments in this source';
     refreshButton.insertAdjacentElement('beforebegin', button);
   }
 
@@ -233,9 +240,12 @@ function renderButton() {
 function mediaForTile(entry) {
   const { comment, attachment } = entry;
   let wrap;
-  if (attachment.url) {
+  const href = attachment.type === 'video' && !attachment.url
+    ? safeHttpUrl(comment.originalUrl)
+    : attachment.url;
+  if (href) {
     wrap = document.createElement('a');
-    wrap.href = attachment.url;
+    wrap.href = href;
     wrap.target = '_blank';
     wrap.rel = 'noopener noreferrer';
   } else {
@@ -258,10 +268,6 @@ function mediaForTile(entry) {
     image.loading = 'lazy';
     image.decoding = 'async';
     wrap.appendChild(image);
-    if (attachment.type === 'video' && comment.originalUrl) {
-      wrap.addEventListener('click', () => window.open(comment.originalUrl, '_blank', 'noopener,noreferrer'));
-      wrap.style.cursor = 'pointer';
-    }
   }
   return wrap;
 }
@@ -275,7 +281,7 @@ function renderDialog() {
   title.textContent = `Attachments · ${entries.length}`;
 
   if (!entries.length) {
-    content.innerHTML = '<div class="comment-attachments-empty">No comment media has been collected yet. Run Refresh while Instagram comments with GIFs, stickers, images, or videos are visible in the worker tab.</div>';
+    content.innerHTML = '<div class="comment-attachments-empty">No verified comment media has been collected yet. Run Refresh while the actual GIF/image/video comments are visible in the Instagram worker tab.</div>';
     return;
   }
 
@@ -339,4 +345,4 @@ if (commentsList) new MutationObserver(() => renderAll()).observe(commentsList, 
 if (sourcesList) new MutationObserver(() => renderButton()).observe(sourcesList, { childList: true });
 
 renderAll();
-console.info('[CC comment media] inline attachments and source gallery ready');
+console.info('[CC comment media] verified inline attachments and source gallery ready');
