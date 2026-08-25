@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.13`.
+Current baseline version: `0.5.14`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.13`;
-- another change on the same day: `0.5.14`;
+- current version: `0.5.14`;
+- another change on the same day: `0.5.15`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -105,14 +105,14 @@ These are default product conventions for applications we build:
 - The Shortcuts control is present in static HTML from first paint. Until its settings state is known, keep it visible but disabled rather than hiding it.
 - The toggle state is stored locally in CC settings and survives reloads.
 - Its tooltip shows the keyboard legend and target-selection rule.
-- When enabled: `ArrowLeft` performs Delete, `ArrowRight` performs Save, `ArrowUp` selects the previous comment, and `ArrowDown` selects the next comment.
-- Save/Delete target the selected comment first; if no comment is selected, target the top visible comment in the comments viewport.
+- When enabled: `ArrowLeft` performs Delete, `ArrowRight` performs Save, `Enter` performs Highlight, `ArrowUp` selects the previous comment, and `ArrowDown` selects the next comment.
+- Save/Delete/Highlight target the selected comment first; if no comment is selected, target the top visible comment in the comments viewport.
 - Up/Down navigation starts from the selected comment; if nothing is selected yet, the first Up/Down selects the top visible comment.
 - Navigating with Up/Down scrolls the selected comment into view.
 - Preserve the current comment index across Delete/Save/Highlight when the action removes that card from the current rendered feed. Down continues with the item that moved into the same position, while Up goes to the previous position instead of restarting from the top.
 - Preserve that position anchor for keyboard actions and manual clicks on the relevant comment actions.
-- Do not hijack arrow keys while the user is typing/editing in an input, textarea, select, contenteditable element, or an open dialog.
-- Save via shortcut must not unsave an already-saved comment.
+- Do not hijack shortcuts while the user is typing/editing in an input, textarea, select, contenteditable element, or an open dialog. `Enter` also keeps its normal behavior when focus is on a button or link.
+- Save via shortcut must not unsave an already-saved comment. Highlight via shortcut must not remove an existing highlight.
 
 ## Comment translation
 
