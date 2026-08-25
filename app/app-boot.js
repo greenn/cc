@@ -1,4 +1,4 @@
-const VERSION = '0.5.27';
+const VERSION = '0.5.28';
 
 const modules = [
   './boot-route.js',
@@ -18,6 +18,7 @@ const modules = [
   './whisper-settings.js',
   './transcript.js',
   './comment-ui.js',
+  './comment-state-sort.js',
   './comment-media.js',
   './comment-attachment-details.js',
   './instagram-helper-row.js',
