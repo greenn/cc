@@ -26,7 +26,7 @@ function showStatus(message, kind = 'info') {
   statusBanner.dataset.kind = kind;
   statusBanner.hidden = false;
   clearTimeout(showStatus.timer);
-  showStatus.timer = setTimeout(() => { statusBanner.hidden = true; }, kind === 'error' ? 12000 : 5000);
+  showStatus.timer = setTimeout(() => { statusBanner.hidden = true; }, kind === 'error' ? 12000 : 7000);
 }
 
 function operationSet(sourceId, create = false) {
@@ -44,6 +44,7 @@ function isOperationRunning(sourceId, operation) {
 
 function operationLabel(operation) {
   if (operation === 'refresh') return 'Refresh';
+  if (operation === 'more') return 'Load more';
   if (operation === 'video') return 'Video';
   if (operation === 'photos') return 'Photos';
   return operation;
@@ -76,6 +77,15 @@ function ensureUi() {
     photos.textContent = 'Photos · ?';
     photos.hidden = true;
     refreshButton.insertAdjacentElement('beforebegin', photos);
+  }
+  if (!document.querySelector('#instagram-load-more')) {
+    const more = document.createElement('button');
+    more.id = 'instagram-load-more';
+    more.type = 'button';
+    more.className = 'ghost-action instagram-media-action';
+    more.textContent = 'Load more';
+    more.hidden = true;
+    refreshButton.insertAdjacentElement('beforebegin', more);
   }
   if (commentsList && !document.querySelector('#instagram-downloaded-media')) {
     const panel = document.createElement('div');
@@ -151,17 +161,37 @@ function render() {
   const availability = source?.instagramMediaAvailability || {};
   const videoButton = document.querySelector('#instagram-video-download');
   const photosButton = document.querySelector('#instagram-photos-download');
+  const moreButton = document.querySelector('#instagram-load-more');
   const panel = document.querySelector('#instagram-downloaded-media');
 
   renderMediaButton(videoButton, source, 'video', 'Video', detectedCount(availability, 'video'));
   renderMediaButton(photosButton, source, 'photos', 'Photos', detectedCount(availability, 'photos'));
 
+  const refreshRunning = Boolean(isInstagram && isOperationRunning(source.id, 'refresh'));
+  const moreRunning = Boolean(isInstagram && isOperationRunning(source.id, 'more'));
+
+  if (moreButton) {
+    const loaded = isInstagram ? store.getComments(source.id).length : 0;
+    moreButton.hidden = !isInstagram || loaded === 0;
+    moreButton.classList.toggle('cc-operation-running', moreRunning);
+    moreButton.disabled = !isInstagram || loaded === 0 || refreshRunning || moreRunning;
+    if (isInstagram) {
+      const round = Math.max(0, Number(source.instagramLoadMoreRound || 0));
+      moreButton.title = moreRunning
+        ? 'Searching deeper in Instagram comments…'
+        : `Search deeper than the current ${loaded} loaded comments. Deep-load pass ${round + 1}.`;
+    }
+  }
+
   if (refreshButton) {
-    const refreshRunning = Boolean(isInstagram && isOperationRunning(source.id, 'refresh'));
     refreshButton.classList.toggle('cc-operation-running', refreshRunning);
     if (isInstagram) {
-      refreshButton.disabled = refreshRunning;
-      refreshButton.title = refreshRunning ? 'Refreshing this Instagram source…' : 'Refresh Instagram comments and media information';
+      refreshButton.disabled = refreshRunning || moreRunning;
+      refreshButton.title = refreshRunning
+        ? 'Refreshing this Instagram source…'
+        : moreRunning
+          ? 'Wait for Load more to finish before refreshing this source.'
+          : 'Refresh the newest Instagram comments and media information';
     } else {
       refreshButton.classList.remove('cc-operation-running');
       refreshButton.disabled = false;
@@ -202,27 +232,81 @@ function refreshCurrentSourceUi(sourceId) {
 }
 
 async function refreshInstagram(source) {
-  if (!source || source.platform !== 'instagram' || isOperationRunning(source.id, 'refresh')) return;
+  if (!source || source.platform !== 'instagram') return;
+  if (isOperationRunning(source.id, 'refresh') || isOperationRunning(source.id, 'more')) return;
+
   setOperation(source.id, 'refresh', true);
-  showStatus('Refreshing Instagram comments and checking media…');
+  showStatus('Refreshing newest Instagram comments and checking media…');
 
   try {
-    const page = await instagramAdapter.getComments(source, null);
+    const before = store.getComments(source.id).length;
+    const page = await instagramAdapter.getComments(source, null, { maxClicks: 40, timeoutMs: 180000 });
     store.upsertComments(source.id, page.comments || []);
+    const total = store.getComments(source.id).length;
+    const added = Math.max(0, total - before);
     const patch = {
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
-      loadedCount: store.getComments(source.id).length,
+      loadedCount: total,
+      commentCount: total,
       lastUpdatedAt: new Date().toISOString(),
       integrationStatus: 'ready',
     };
-    if (page.totalResults != null) patch.commentCount = page.totalResults;
     store.updateSource(source.id, patch);
-    showStatus('Instagram source refreshed. Comments and media information were updated.');
+    showStatus(added
+      ? `Instagram refreshed: ${added} new comment${added === 1 ? '' : 's'}; ${total} loaded total.`
+      : `Instagram refreshed. ${total} comments remain loaded.`);
   } catch (error) {
     showStatus(error?.message || 'Could not refresh Instagram source.', 'error');
   } finally {
     setOperation(source.id, 'refresh', false);
+    refreshCurrentSourceUi(source.id);
+    render();
+  }
+}
+
+async function loadMoreInstagram(source) {
+  if (!source || source.platform !== 'instagram') return;
+  if (isOperationRunning(source.id, 'refresh') || isOperationRunning(source.id, 'more')) return;
+
+  const latest = store.getSource(source.id) || source;
+  const round = Math.max(1, Number(latest.instagramLoadMoreRound || 0) + 1);
+  const maxClicks = Math.min(240, 40 + round * 40);
+  const before = store.getComments(source.id).length;
+
+  setOperation(source.id, 'more', true);
+  showStatus(`Loading deeper Instagram comments… pass ${round}. You can switch to another CC source while this continues.`);
+
+  try {
+    const page = await instagramAdapter.getComments(latest, null, {
+      maxClicks,
+      timeoutMs: 480000,
+    });
+    store.upsertComments(source.id, page.comments || []);
+    const total = store.getComments(source.id).length;
+    const added = Math.max(0, total - before);
+    const current = store.getSource(source.id) || latest;
+    store.updateSource(source.id, {
+      nextCursor: page.nextCursor,
+      hasMore: page.hasMore,
+      loadedCount: total,
+      commentCount: total,
+      instagramLoadMoreRound: round,
+      instagramLastDeepLoadAdded: added,
+      instagramLastDeepLoadAt: new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString(),
+      integrationStatus: 'ready',
+    });
+
+    if (added > 0) {
+      showStatus(`Loaded ${added} more Instagram comment${added === 1 ? '' : 's'}. ${total} loaded total.`);
+    } else {
+      showStatus(`No additional comments were found in deep-load pass ${round}. The next pass will use a larger crawl budget; Instagram may also be temporarily withholding older comments.`);
+    }
+  } catch (error) {
+    showStatus(error?.message || 'Could not load more Instagram comments.', 'error');
+  } finally {
+    setOperation(source.id, 'more', false);
     refreshCurrentSourceUi(source.id);
     render();
   }
@@ -281,8 +365,7 @@ async function downloadKind(kind, button) {
 }
 
 // Instagram Refresh is handled here rather than by app.js so operations are
-// tracked per source. That allows two different Instagram sources to refresh
-// concurrently, each in its own Browser Helper worker tab.
+// tracked per source. Different Instagram sources can continue independently.
 document.addEventListener('click', (event) => {
   const refresh = event.target.closest?.('#refresh-button');
   if (!refresh) return;
@@ -294,6 +377,13 @@ document.addEventListener('click', (event) => {
 }, true);
 
 document.addEventListener('click', (event) => {
+  const more = event.target.closest?.('#instagram-load-more');
+  if (more) {
+    event.preventDefault();
+    void loadMoreInstagram(currentSource());
+    return;
+  }
+
   const video = event.target.closest?.('#instagram-video-download');
   if (video) {
     event.preventDefault();
@@ -359,4 +449,4 @@ if (sourcesList) {
 
 ensureUi();
 render();
-console.info('[CC Instagram media] concurrent operations, counts, and local Downloads integration ready');
+console.info('[CC Instagram media] incremental deep loading, concurrent operations, counts, and local Downloads integration ready');
