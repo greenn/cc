@@ -5,21 +5,26 @@
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   let lastProgressAt = 0;
   let lastProgressSignature = '';
+  let nextBatchId = 1;
 
   function reportProgress(sourceId, progress = {}, force = false) {
     if (!sourceId) return;
     const payload = {
+      passId: String(progress.passId || ''),
       phase: String(progress.phase || 'collecting'),
       collected: Math.max(0, Number(progress.collected || 0)),
+      streamed: Math.max(0, Number(progress.streamed || 0)),
       clicks: Math.max(0, Number(progress.clicks || 0)),
       scrollMoves: Math.max(0, Number(progress.scrollMoves || 0)),
+      pageDowns: Math.max(0, Number(progress.pageDowns || 0)),
+      manualScrollMoves: Math.max(0, Number(progress.manualScrollMoves || 0)),
       step: Math.max(0, Number(progress.step || 0)),
       maxSteps: Math.max(0, Number(progress.maxSteps || 0)),
       stableRounds: Math.max(0, Number(progress.stableRounds || 0)),
       stableLimit: Math.max(0, Number(progress.stableLimit || 0)),
       timestamp: Date.now(),
     };
-    const signature = `${payload.phase}:${payload.collected}:${payload.clicks}:${payload.scrollMoves}:${payload.step}`;
+    const signature = `${payload.passId}:${payload.phase}:${payload.collected}:${payload.streamed}:${payload.clicks}:${payload.scrollMoves}:${payload.pageDowns}:${payload.manualScrollMoves}:${payload.step}`;
     const now = Date.now();
     if (!force && now - lastProgressAt < 280 && signature === lastProgressSignature) return;
     if (!force && now - lastProgressAt < 180) return;
@@ -32,6 +37,27 @@
     }, () => {
       void chrome.runtime.lastError;
     });
+  }
+
+  function streamComments(sourceId, passId, comments, meta = {}) {
+    if (!sourceId || !comments.length) return;
+    for (let start = 0; start < comments.length; start += 25) {
+      const chunk = comments.slice(start, start + 25);
+      chrome.runtime.sendMessage({
+        type: 'CC_INSTAGRAM_COMMENT_BATCH',
+        sourceId,
+        passId,
+        batchId: `${passId || sourceId}:${Date.now()}:${nextBatchId++}`,
+        comments: chunk,
+        meta: {
+          ...meta,
+          batchSize: chunk.length,
+          timestamp: Date.now(),
+        },
+      }, () => {
+        void chrome.runtime.lastError;
+      });
+    }
   }
 
   function simpleHash(value) {
@@ -173,6 +199,44 @@
     return [...new Set(lines)].sort((a, b) => b.length - a.length)[0] || '';
   }
 
+  function safeHttpUrl(value) {
+    try {
+      const url = new URL(String(value || ''), location.href);
+      return /^https?:$/i.test(url.protocol) ? url.toString() : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function extractAttachments(node, authorAnchor) {
+    const attachments = [];
+    const seen = new Set();
+    const add = (type, url, alt = '') => {
+      const safe = safeHttpUrl(url);
+      if (!safe || seen.has(safe)) return;
+      seen.add(safe);
+      attachments.push({ type, url: safe, alt: String(alt || '').trim() });
+    };
+
+    for (const image of node.querySelectorAll('img[src]')) {
+      if (authorAnchor?.contains(image)) continue;
+      const alt = image.getAttribute('alt') || '';
+      const rect = image.getBoundingClientRect();
+      const width = Number(image.naturalWidth || rect.width || 0);
+      const height = Number(image.naturalHeight || rect.height || 0);
+      const explicitGraphic = /gif|sticker|стикер|animation|анимац/i.test(alt);
+      if (!explicitGraphic && Math.max(width, height) < 56) continue;
+      add('image', image.currentSrc || image.src, alt);
+    }
+
+    for (const video of node.querySelectorAll('video')) {
+      const url = video.currentSrc || video.src || video.querySelector('source[src]')?.src || '';
+      add('video', url, video.getAttribute('aria-label') || '');
+    }
+
+    return attachments;
+  }
+
   function parseNumber(text) {
     const normalized = String(text || '').replace(/\s/g, '').replace(',', '.');
     const match = normalized.match(/(\d+(?:\.\d+)?)([kmкм])?/i);
@@ -205,12 +269,14 @@
     const username = usernameFromAnchor(author);
     if (!username) return Infinity;
     const raw = (node.innerText || '').trim();
-    if (raw.length < 2 || raw.length > 3000) return Infinity;
+    if (raw.length > 3000) return Infinity;
     if (!node.querySelector('time') && !commentPermalink(node)) return Infinity;
-    if (!cleanCandidateText(node, username)) return Infinity;
+    const text = cleanCandidateText(node, username);
+    const attachments = extractAttachments(node, author);
+    if (!text && !attachments.length) return Infinity;
     const profiles = node.querySelectorAll('a[href^="/"]').length;
     if (profiles > 10) return Infinity;
-    return raw.length + profiles * 320 - (commentPermalink(node) ? 180 : 0);
+    return Math.max(1, raw.length) + profiles * 320 - (commentPermalink(node) ? 180 : 0) - attachments.length * 40;
   }
 
   function nearestCommentContainer(seed, root) {
@@ -264,7 +330,8 @@
       const username = usernameFromAnchor(author);
       if (!username) continue;
       const text = cleanCandidateText(node, username);
-      if (!text || text.length < 2) continue;
+      const attachments = extractAttachments(node, author);
+      if (!text && !attachments.length) continue;
       const time = node.querySelector('time');
       const publishedAt = time?.getAttribute('datetime') || null;
       const permalink = commentPermalink(node);
@@ -276,11 +343,12 @@
           explicitId = originalUrl;
         } catch { /* keep source URL */ }
       }
-      const platformCommentId = explicitId || simpleHash(`${username}\n${publishedAt || ''}\n${text}`);
+      const attachmentKey = attachments.map((item) => item.url).join('|');
+      const platformCommentId = explicitId || simpleHash(`${username}\n${publishedAt || ''}\n${text}\n${attachmentKey}`);
       if (seen.has(platformCommentId)) continue;
       seen.add(platformCommentId);
       const stats = extractStats(node);
-      const avatar = node.querySelector('img[src]');
+      const avatar = author?.querySelector('img[src]');
       output.push({
         id: `instagram:${platformCommentId}`,
         sourceId,
@@ -290,6 +358,7 @@
         authorUsername: `@${username}`,
         authorAvatar: avatar?.src || '',
         text,
+        attachments,
         publishedAt,
         likeCount: stats.likeCount,
         replyCount: stats.replyCount,
@@ -300,8 +369,24 @@
   }
 
   function mergeComments(target, comments) {
-    for (const comment of comments) target.set(comment.id, comment);
-    return target.size;
+    let added = 0;
+    for (const comment of comments) {
+      if (!target.has(comment.id)) added += 1;
+      target.set(comment.id, comment);
+    }
+    return added;
+  }
+
+  function mergeAndStream(target, comments, sourceId, passId, streamedIds, meta = {}) {
+    mergeComments(target, comments);
+    const fresh = [];
+    for (const comment of comments) {
+      if (streamedIds.has(comment.id)) continue;
+      streamedIds.add(comment.id);
+      fresh.push(comment);
+    }
+    if (fresh.length) streamComments(sourceId, passId, fresh, meta);
+    return fresh.length;
   }
 
   function buttonText(button) {
@@ -345,14 +430,48 @@
     return candidates[0] || null;
   }
 
-  async function waitForInitialComments(url, sourceId, accumulator, timeoutMs = 18000) {
+  function pageDownScroller(scroller) {
+    if (!scroller) return false;
+    const before = scroller.scrollTop;
+    const hadTabIndex = scroller.hasAttribute('tabindex');
+    const oldTabIndex = scroller.getAttribute('tabindex');
+    try {
+      if (!hadTabIndex) scroller.setAttribute('tabindex', '-1');
+      scroller.focus({ preventScroll: true });
+      scroller.dispatchEvent(new KeyboardEvent('keydown', {
+        key: 'PageDown',
+        code: 'PageDown',
+        keyCode: 34,
+        which: 34,
+        bubbles: true,
+      }));
+      scroller.scrollBy({ top: Math.max(320, scroller.clientHeight * 0.92), behavior: 'auto' });
+      scroller.dispatchEvent(new KeyboardEvent('keyup', {
+        key: 'PageDown',
+        code: 'PageDown',
+        keyCode: 34,
+        which: 34,
+        bubbles: true,
+      }));
+    } catch {
+      scroller.scrollTop = Math.min(scroller.scrollHeight, before + Math.max(320, scroller.clientHeight * 0.92));
+    } finally {
+      if (!hadTabIndex) scroller.removeAttribute('tabindex');
+      else if (oldTabIndex !== null) scroller.setAttribute('tabindex', oldTabIndex);
+    }
+    return Math.abs(scroller.scrollTop - before) > 2;
+  }
+
+  async function waitForInitialComments(url, sourceId, accumulator, streamedIds, passId, timeoutMs = 18000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
-      mergeComments(accumulator, collect(url, sourceId));
+      mergeAndStream(accumulator, collect(url, sourceId), sourceId, passId, streamedIds, { phase: 'waiting-comments' });
       reportProgress(sourceId, {
+        passId,
         phase: accumulator.size > 0 ? 'collecting' : 'waiting-comments',
         collected: accumulator.size,
+        streamed: streamedIds.size,
       }, accumulator.size > 0);
       if (accumulator.size > 0 || moreButtons().length > 0) return;
       if (isReelPage() && !commentsPanelOpen()) await openReelCommentsIfNeeded(2500);
@@ -360,28 +479,37 @@
     }
   }
 
-  async function loadAndCollect(url, sourceId, maxClicks) {
+  async function loadAndCollect(url, sourceId, maxClicks, requestedPassId = '') {
     if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
 
-    reportProgress(sourceId, { phase: 'opening-comments', collected: 0 }, true);
+    const passId = String(requestedPassId || `${sourceId || 'instagram'}:${Date.now()}`);
+    const streamedIds = new Set();
+    reportProgress(sourceId, { passId, phase: 'opening-comments', collected: 0, streamed: 0 }, true);
     const reelPanel = await openReelCommentsIfNeeded();
     const accumulator = new Map();
-    await waitForInitialComments(url, sourceId, accumulator);
+    await waitForInitialComments(url, sourceId, accumulator, streamedIds, passId);
 
     let clicks = 0;
     let scrollMoves = 0;
+    let pageDowns = 0;
+    let manualScrollMoves = 0;
     let stableRounds = 0;
     let previousSize = accumulator.size;
+    let lastKnownScrollTop = commentScroller()?.scrollTop ?? null;
     const maxSteps = Math.max(60, Math.min(720, maxClicks * 3));
     const stableLimit = Math.min(36, Math.max(8, 7 + Math.floor(maxClicks / 8)));
     const deepMode = maxClicks > 40;
     let steps = 0;
 
     reportProgress(sourceId, {
+      passId,
       phase: 'collecting',
       collected: accumulator.size,
+      streamed: streamedIds.size,
       clicks,
       scrollMoves,
+      pageDowns,
+      manualScrollMoves,
       step: 0,
       maxSteps,
       stableRounds,
@@ -392,7 +520,7 @@
       if (isLoggedOut()) break;
       if (isReelPage() && !commentsPanelOpen()) await openReelCommentsIfNeeded(3500);
 
-      mergeComments(accumulator, collect(url, sourceId));
+      mergeAndStream(accumulator, collect(url, sourceId), sourceId, passId, streamedIds, { phase: 'checking', step: steps + 1 });
       const sizeAtStepStart = accumulator.size;
       let progressed = accumulator.size > previousSize;
       previousSize = accumulator.size;
@@ -407,42 +535,62 @@
           buttons[0].click();
           clicks += 1;
           progressed = true;
+          const afterButtonScroller = commentScroller();
+          if (afterButtonScroller) lastKnownScrollTop = afterButtonScroller.scrollTop;
           reportProgress(sourceId, {
+            passId,
             phase,
             collected: accumulator.size,
+            streamed: streamedIds.size,
             clicks,
             scrollMoves,
+            pageDowns,
+            manualScrollMoves,
             step: steps + 1,
             maxSteps,
             stableRounds,
             stableLimit,
           }, true);
           await sleep(deepMode ? 700 : 850);
-          mergeComments(accumulator, collect(url, sourceId));
+          mergeAndStream(accumulator, collect(url, sourceId), sourceId, passId, streamedIds, { phase, step: steps + 1 });
         } catch {
           phase = 'scrolling';
         }
       } else {
         const scroller = commentScroller();
         if (scroller) {
-          phase = 'scrolling';
           const before = scroller.scrollTop;
+          if (lastKnownScrollTop !== null && Math.abs(before - lastKnownScrollTop) > 24) {
+            manualScrollMoves += 1;
+            mergeAndStream(accumulator, collect(url, sourceId), sourceId, passId, streamedIds, { phase: 'manual-scroll', step: steps + 1 });
+          }
+
           const beforeHeight = scroller.scrollHeight;
-          const multiplier = deepMode ? 1.2 : 0.82;
-          scroller.scrollTop = Math.min(scroller.scrollHeight, before + Math.max(320, scroller.clientHeight * multiplier));
+          const usePageDown = (steps + 1) % 7 === 0;
+          if (usePageDown) {
+            phase = 'page-down';
+            if (pageDownScroller(scroller)) {
+              pageDowns += 1;
+              scrollMoves += 1;
+              progressed = true;
+            }
+          } else {
+            phase = 'scrolling';
+            const multiplier = deepMode ? 1.2 : 0.82;
+            scroller.scrollTop = Math.min(scroller.scrollHeight, before + Math.max(320, scroller.clientHeight * multiplier));
+          }
+
           await sleep(deepMode ? 650 : 850);
           const moved = Math.abs(scroller.scrollTop - before) > 2 || scroller.scrollHeight > beforeHeight;
-          if (moved) {
+          if (!usePageDown && moved) {
             scrollMoves += 1;
             progressed = true;
-          } else if (deepMode) {
+          } else if (!moved && deepMode) {
             phase = 'waiting-more';
-            // At a temporary bottom Instagram can still append another chunk a
-            // moment later. Give deep-load passes a little more time before
-            // deciding that the list is stable.
             await sleep(750);
           }
-          mergeComments(accumulator, collect(url, sourceId));
+          lastKnownScrollTop = scroller.scrollTop;
+          mergeAndStream(accumulator, collect(url, sourceId), sourceId, passId, streamedIds, { phase, step: steps + 1 });
         } else {
           phase = 'waiting-panel';
           await sleep(deepMode ? 900 : 650);
@@ -454,10 +602,14 @@
       stableRounds = progressed ? 0 : stableRounds + 1;
 
       reportProgress(sourceId, {
+        passId,
         phase,
         collected: accumulator.size,
+        streamed: streamedIds.size,
         clicks,
         scrollMoves,
+        pageDowns,
+        manualScrollMoves,
         step: steps + 1,
         maxSteps,
         stableRounds,
@@ -465,7 +617,7 @@
       }, accumulator.size !== sizeAtStepStart);
     }
 
-    mergeComments(accumulator, collect(url, sourceId));
+    mergeAndStream(accumulator, collect(url, sourceId), sourceId, passId, streamedIds, { phase: 'complete', step: steps });
     const comments = [...accumulator.values()];
     const scroller = commentScroller();
     const diagnostics = {
@@ -473,12 +625,15 @@
       permalinkAnchors: document.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').length,
       timestamps: document.querySelectorAll('time').length,
       parsedComments: comments.length,
+      streamedComments: streamedIds.size,
       loadButtons: moreButtons().length,
       loggedOut: isLoggedOut(),
       reelPage: reelPanel.reelPage,
       commentsPanelClickAttempted: reelPanel.clickAttempted,
       commentsPanelOpen: commentsPanelOpen(),
       scrollMoves,
+      pageDowns,
+      manualScrollMoves,
       scrollTop: scroller ? Math.round(scroller.scrollTop) : null,
       scrollHeight: scroller ? scroller.scrollHeight : null,
       clientHeight: scroller ? scroller.clientHeight : null,
@@ -491,10 +646,14 @@
     };
 
     reportProgress(sourceId, {
+      passId,
       phase: 'complete',
       collected: comments.length,
+      streamed: streamedIds.size,
       clicks,
       scrollMoves,
+      pageDowns,
+      manualScrollMoves,
       step: steps,
       maxSteps,
       stableRounds,
@@ -504,15 +663,21 @@
     return {
       comments,
       clicks,
+      passId,
       pageUrl: location.href,
       diagnostics,
-      note: 'Instagram DOM is private and can change; deeper CC passes revisit the temporary Reel page with a larger crawl budget and merge newly discovered comments locally.',
+      note: 'Comments are streamed into CC as they are discovered. Manual scrolling is noticed by the collector, and periodic PageDown-style moves are mixed with targeted comment-panel scrolling.',
     };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'CC_INSTAGRAM_COLLECT') return false;
-    loadAndCollect(message.url || location.href, message.sourceId, Math.max(1, Number(message.maxClicks || 40)))
+    loadAndCollect(
+      message.url || location.href,
+      message.sourceId,
+      Math.max(1, Number(message.maxClicks || 40)),
+      message.passId || '',
+    )
       .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
     return true;
