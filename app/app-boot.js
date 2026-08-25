@@ -1,9 +1,10 @@
-const VERSION = '0.5.26';
+const VERSION = '0.5.27';
 
 const modules = [
   './boot-route.js',
   './avatar-policy.js',
   './app.js',
+  './settings-tabs.js',
   './source-groups.js',
   './source-meta.js',
   './instagram-media.js',
