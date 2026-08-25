@@ -14,6 +14,8 @@ function legend(enabled = isEnabled()) {
     `Shortcuts ${enabled ? 'ON' : 'OFF'}`,
     '← Delete comment',
     '→ Save comment',
+    '↑ Previous comment',
+    '↓ Next comment',
     'Target: selected comment; otherwise the top visible comment',
   ].join('\n');
 }
@@ -52,14 +54,13 @@ function isEditableTarget(target) {
   return Boolean(target.closest('dialog[open]'));
 }
 
-function selectedOrTopVisibleCard() {
-  const cards = [...document.querySelectorAll('#comments-list .comment-card')]
+function commentCards() {
+  return [...document.querySelectorAll('#comments-list .comment-card')]
     .filter((card) => !card.hidden && card.getClientRects().length > 0);
+}
+
+function topVisibleCard(cards = commentCards()) {
   if (!cards.length) return null;
-
-  const selected = cards.find((card) => card.classList.contains('is-selected'));
-  if (selected) return selected;
-
   const viewport = contentArea?.getBoundingClientRect();
   if (!viewport) return cards[0];
 
@@ -69,6 +70,12 @@ function selectedOrTopVisibleCard() {
     .sort((a, b) => a.rect.top - b.rect.top);
 
   return visible[0]?.card || cards[0];
+}
+
+function selectedOrTopVisibleCard() {
+  const cards = commentCards();
+  if (!cards.length) return null;
+  return cards.find((card) => card.classList.contains('is-selected')) || topVisibleCard(cards);
 }
 
 function performAction(action) {
@@ -92,6 +99,27 @@ function performAction(action) {
   return false;
 }
 
+function navigateComments(direction) {
+  const cards = commentCards();
+  if (!cards.length) return false;
+
+  const selectedIndex = cards.findIndex((card) => card.classList.contains('is-selected'));
+  let target = null;
+
+  if (selectedIndex < 0) {
+    target = topVisibleCard(cards);
+  } else {
+    const nextIndex = selectedIndex + direction;
+    if (nextIndex < 0 || nextIndex >= cards.length) return true;
+    target = cards[nextIndex];
+  }
+
+  if (!target) return false;
+  target.click();
+  target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  return true;
+}
+
 document.addEventListener('keydown', (event) => {
   if (!isEnabled()) return;
   if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -100,6 +128,8 @@ document.addEventListener('keydown', (event) => {
   let handled = false;
   if (event.key === 'ArrowLeft') handled = performAction('delete');
   if (event.key === 'ArrowRight') handled = performAction('save');
+  if (event.key === 'ArrowUp') handled = navigateComments(-1);
+  if (event.key === 'ArrowDown') handled = navigateComments(1);
 
   if (handled) {
     event.preventDefault();
