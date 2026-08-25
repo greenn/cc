@@ -96,6 +96,9 @@ export const instagramAdapter = {
         Number.isFinite(Number(diagnostic.commentCandidates)) ? `candidates ${diagnostic.commentCandidates}` : '',
         Number.isFinite(Number(diagnostic.permalinkAnchors)) ? `permalinks ${diagnostic.permalinkAnchors}` : '',
         Number.isFinite(Number(diagnostic.timestamps)) ? `timestamps ${diagnostic.timestamps}` : '',
+        diagnostic.reelPage
+          ? `reel comments ${diagnostic.commentsPanelOpen ? 'open' : diagnostic.commentsPanelClickAttempted ? 'click attempted' : 'button not found'}`
+          : '',
       ].filter(Boolean).join(' · ');
       throw new Error(`Instagram helper found no comments${details ? ` (${details})` : ''}. Make sure comments are visible on the post/reel and that CC Browser Helper is reloaded to the latest version.`);
     }
