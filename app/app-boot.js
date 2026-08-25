@@ -1,4 +1,4 @@
-const VERSION = '0.5.16';
+const VERSION = '0.5.17';
 
 const modules = [
   './boot-route.js',
@@ -7,6 +7,7 @@ const modules = [
   './source-groups.js',
   './source-meta.js',
   './instagram-media.js',
+  './instagram-progress.js',
   './comment-accounts.js',
   './vk-settings.js',
   './helper-settings.js',
