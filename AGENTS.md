@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.16`.
+Current baseline version: `0.5.17`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.16`;
-- another change on the same day: `0.5.17`;
+- current version: `0.5.17`;
+- another change on the same day: `0.5.18`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -74,6 +74,8 @@ These are default product conventions for applications we build:
 - A zero-comment scrape is not proof that the Instagram source was deleted. Keep the source and leave Refresh available; do not offer destructive deletion based only on missing rendered comment markup.
 - For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
 - Reel comment collection should open the Comments panel if necessary, then accumulate parsed comments while clicking load/reply controls and scrolling the comments panel. Do not return only the final currently-rendered DOM viewport because Instagram can virtualize the list.
+- During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments accumulated in the current helper pass plus the current phase (opening comments, collecting, expanding, scrolling, waiting, finishing) and crawl step. The current source header and the left source processing badge should update without waiting for the scrape to finish.
+- Live progress is diagnostic activity, not a promise that every displayed count is newly added to local storage. A deep pass may rediscover comments CC already has; the final merge still determines how many comments are actually new.
 - After at least one Instagram comment batch has been loaded, expose a `Load more` action beside Refresh. Each successive deep-load pass uses a larger crawl budget, reopens the temporary worker page, searches farther down the comment panel, and merges only newly discovered comments into the existing local source without deleting previous results.
 - `Refresh` is for the newest/current Instagram state; `Load more` is for progressively deeper older comments. Running either operation for a source must not stop when the user navigates to another CC source.
 - Instagram media downloads are explicit user actions only. Save requested video/photos to the local Chrome Downloads folder under `CC/Instagram/...`; do not mirror media to the PHP backend by default.
