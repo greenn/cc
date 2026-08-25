@@ -150,14 +150,16 @@
     return { reelPage: true, clickAttempted, opened: commentsPanelOpen() };
   }
 
+  function isProfileHref(value) {
+    const href = String(value || '');
+    return /^\/[A-Za-z0-9._]+\/?(?:\?.*)?$/.test(href)
+      && !href.startsWith('/explore/')
+      && !href.startsWith('/accounts/')
+      && !href.startsWith('/direct/');
+  }
+
   function profileAnchor(node) {
-    return [...node.querySelectorAll('a[href]')].find((anchor) => {
-      const href = anchor.getAttribute('href') || '';
-      return /^\/[A-Za-z0-9._]+\/?(?:\?.*)?$/.test(href)
-        && !href.startsWith('/explore/')
-        && !href.startsWith('/accounts/')
-        && !href.startsWith('/direct/');
-    }) || null;
+    return [...node.querySelectorAll('a[href]')].find((anchor) => isProfileHref(anchor.getAttribute('href'))) || null;
   }
 
   function usernameFromAnchor(anchor) {
@@ -198,6 +200,30 @@
     }
   }
 
+  function mediaKindFromUrl(value) {
+    const safe = safeHttpUrl(value);
+    if (!safe) return '';
+    try {
+      const pathname = new URL(safe).pathname.toLowerCase();
+      if (/\.(?:gif|gifv|webp|jpe?g|png|avif)$/.test(pathname)) return 'image';
+      if (/\.(?:mp4|webm|mov|m4v)$/.test(pathname)) return 'video';
+    } catch {
+      return '';
+    }
+    return '';
+  }
+
+  function stableMediaIdentity(value) {
+    const safe = safeHttpUrl(value);
+    if (!safe) return '';
+    try {
+      const url = new URL(safe);
+      return `${url.origin}${url.pathname}`;
+    } catch {
+      return safe;
+    }
+  }
+
   function srcsetUrl(value) {
     const candidates = String(value || '').split(',')
       .map((part) => part.trim().split(/\s+/)[0])
@@ -215,12 +241,7 @@
 
   function isProfileMedia(node) {
     const anchor = node?.closest?.('a[href]');
-    if (!anchor) return false;
-    const href = anchor.getAttribute('href') || '';
-    return /^\/[A-Za-z0-9._]+\/?(?:\?.*)?$/.test(href)
-      && !href.startsWith('/explore/')
-      && !href.startsWith('/accounts/')
-      && !href.startsWith('/direct/');
+    return Boolean(anchor && isProfileHref(anchor.getAttribute('href')));
   }
 
   function extractAttachments(node, authorAnchor) {
@@ -230,11 +251,12 @@
       const direct = safeHttpUrl(url);
       const preview = safeHttpUrl(previewUrl);
       if (!direct && !preview) return;
-      const key = `${type}:${direct || preview}`;
-      if (seen.has(key)) return;
+      const normalizedType = type === 'video' ? 'video' : 'image';
+      const key = `${normalizedType}:${stableMediaIdentity(direct || preview)}`;
+      if (!key || seen.has(key)) return;
       seen.add(key);
       attachments.push({
-        type: type === 'video' ? 'video' : 'image',
+        type: normalizedType,
         url: direct,
         previewUrl: preview,
         alt: String(alt || '').trim(),
@@ -244,18 +266,20 @@
     for (const image of node.querySelectorAll('img')) {
       if (authorAnchor?.contains(image) || isProfileMedia(image)) continue;
       const alt = image.getAttribute('alt') || image.getAttribute('aria-label') || '';
+      const url = safeHttpUrl(image.currentSrc || image.src) || srcsetUrl(image.getAttribute('srcset'));
       const rect = image.getBoundingClientRect();
       const width = Number(rect.width || image.naturalWidth || 0);
       const height = Number(rect.height || image.naturalHeight || 0);
-      const explicitGraphic = /gif|giphy|sticker|стикер|animation|анимац|image|photo|изображ/i.test(alt);
+      const explicitGraphic = mediaKindFromUrl(url) === 'image'
+        || /gif|giphy|sticker|стикер|animation|анимац|image|photo|изображ/i.test(alt);
       if (!explicitGraphic && Math.max(width, height) < 24) continue;
-      const url = safeHttpUrl(image.currentSrc || image.src) || srcsetUrl(image.getAttribute('srcset'));
       add('image', url, '', alt);
     }
 
     for (const source of node.querySelectorAll('picture source[srcset]')) {
       if (authorAnchor?.contains(source) || isProfileMedia(source)) continue;
-      add('image', srcsetUrl(source.getAttribute('srcset')), '', source.getAttribute('aria-label') || '');
+      const url = srcsetUrl(source.getAttribute('srcset'));
+      if (url) add('image', url, '', source.getAttribute('aria-label') || '');
     }
 
     for (const graphic of node.querySelectorAll('[role="img"]')) {
@@ -278,9 +302,8 @@
     for (const link of node.querySelectorAll('a[href]')) {
       if (link === authorAnchor || isProfileMedia(link)) continue;
       const href = safeHttpUrl(link.getAttribute('href'));
-      if (!href) continue;
-      if (/\.(?:gif|gifv|webp|jpe?g|png)(?:$|[?#])/i.test(href)) add('image', href, '', link.getAttribute('aria-label') || '');
-      if (/\.(?:mp4|webm|mov)(?:$|[?#])/i.test(href)) add('video', href, '', link.getAttribute('aria-label') || '');
+      const kind = mediaKindFromUrl(href);
+      if (kind) add(kind, href, '', link.getAttribute('aria-label') || '');
     }
 
     return attachments;
@@ -312,20 +335,43 @@
     ) || null;
   }
 
+  function hasCommentEngagement(node) {
+    const text = String(node?.innerText || '').replace(/\s+/g, ' ').trim();
+    if (!text) return false;
+    return /(?:^|\s)(?:Reply|Ответить)(?:\s|$)/i.test(text)
+      || /\b\d[\d.,\s]*\s*(?:likes?|отмет(?:ка|ки|ок)\s+«?нравится»?)\b/i.test(text)
+      || /(?:view|show|посмотреть|показать)\s+(?:all\s+)?\d+\s+(?:repl(?:y|ies)|ответ)/i.test(text);
+  }
+
   function candidateScore(node) {
     if (!node) return Infinity;
     const author = profileAnchor(node);
     const username = usernameFromAnchor(author);
     if (!username) return Infinity;
+
     const raw = (node.innerText || '').trim();
     if (raw.length > 3500) return Infinity;
-    if (!node.querySelector('time') && !commentPermalink(node)) return Infinity;
+
+    const permalink = commentPermalink(node);
+    const hasTime = Boolean(node.querySelector('time'));
+    const engagement = hasCommentEngagement(node);
+    if (!hasTime && !permalink && !engagement) return Infinity;
+
     const text = cleanCandidateText(node, username);
     const attachments = extractAttachments(node, author);
     if (!text && !attachments.length) return Infinity;
-    const profiles = node.querySelectorAll('a[href^="/"]').length;
-    if (profiles > 10) return Infinity;
-    return Math.max(1, raw.length) + profiles * 320 - (commentPermalink(node) ? 180 : 0) - attachments.length * 60;
+
+    const profileHrefs = new Set([...node.querySelectorAll('a[href]')]
+      .map((anchor) => anchor.getAttribute('href') || '')
+      .filter(isProfileHref));
+    if (profileHrefs.size > 4) return Infinity;
+
+    return Math.max(1, raw.length)
+      + profileHrefs.size * 320
+      - (permalink ? 180 : 0)
+      - (hasTime ? 60 : 0)
+      - (engagement ? 80 : 0)
+      - attachments.length * 90;
   }
 
   function nearestCommentContainer(seed, root) {
@@ -378,23 +424,28 @@
       const text = cleanCandidateText(node, username);
       const attachments = extractAttachments(node, author);
       if (!text && !attachments.length) continue;
+
       const time = node.querySelector('time');
       const publishedAt = time?.getAttribute('datetime') || null;
       const permalink = commentPermalink(node);
-      let originalUrl = url;
+      let originalUrl = '';
       let explicitId = '';
       if (permalink) {
         try {
           originalUrl = new URL(permalink.getAttribute('href'), location.origin).toString();
           explicitId = originalUrl;
         } catch {
-          // Keep the source URL.
+          // If Instagram exposes no true comment permalink, do not pretend the Reel URL is the comment URL.
         }
       }
-      const attachmentKey = attachments.map((item) => `${item.type}:${item.url || item.previewUrl}`).join('|');
-      const platformCommentId = explicitId || simpleHash(`${username}\n${publishedAt || ''}\n${text}\n${attachmentKey}`);
+
+      const attachmentIdentity = attachments
+        .map((item) => `${item.type}:${stableMediaIdentity(item.url || item.previewUrl)}`)
+        .join('|');
+      const platformCommentId = explicitId || simpleHash(`${username}\n${publishedAt || ''}\n${text}\n${attachmentIdentity}`);
       if (seen.has(platformCommentId)) continue;
       seen.add(platformCommentId);
+
       const stats = extractStats(node);
       const avatar = author?.querySelector('img[src]');
       output.push({
@@ -407,6 +458,8 @@
         authorAvatar: avatar?.src || '',
         text,
         attachments,
+        attachmentScope: 'comment',
+        attachmentParserVersion: 2,
         publishedAt,
         likeCount: stats.likeCount,
         replyCount: stats.replyCount,
@@ -704,7 +757,7 @@
       passId,
       pageUrl: location.href,
       diagnostics,
-      note: 'Comments and their visible GIF/image/video attachments are streamed into CC as they are discovered. Manual scrolling in the focused worker tab is still supported.',
+      note: 'Attachments are read only from the nearest verified comment DOM container. GIF/image/video URLs are streamed with that comment; the Reel/post itself is not used as a fallback comment attachment or comment permalink.',
     };
   }
 
