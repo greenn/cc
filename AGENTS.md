@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.9`.
+Current baseline version: `0.5.10`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.9`;
-- another change on the same day: `0.5.10`;
+- current version: `0.5.10`;
+- another change on the same day: `0.5.11`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -74,6 +74,9 @@ These are default product conventions for applications we build:
 - When a refresh returns zero candidates, zero permalinks, and zero timestamps, do not claim with certainty that the post was deleted. It may be deleted/unavailable or Instagram may not have exposed usable markup. Offer the user a confirmation to remove that source from CC.
 - Instagram media downloads are explicit user actions only. Save requested video/photos to the local Chrome Downloads folder under `CC/Instagram/...`; do not mirror media to the PHP backend by default.
 - Keep downloaded-media metadata in the CC source so the app can show downloaded items above Comments and reopen them through the Browser Helper.
+- After an Instagram Refresh/media probe, retain detected `videoCount` and `photoCount` in the source. Media action buttons show `?` until the count is known, then show the detected count; a known zero disables that media action instead of silently hiding the information.
+- Instagram operations are tracked per source, not globally. Different Instagram sources may run Refresh/media operations concurrently, with one independent temporary Browser Helper worker tab per request. Prevent duplicate execution of the same operation on the same source while it is already running.
+- While an Instagram Refresh/Video/Photos operation is active, animate the initiating action with moving diagonal black/white stripes and mark that source as processing in the left source list. Navigating to another source must not stop the background operation or lose its processing marker.
 
 ## Saved/highlighted comment flow
 
