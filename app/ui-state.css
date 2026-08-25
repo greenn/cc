@@ -73,6 +73,59 @@
   display: none !important;
 }
 
+@keyframes cc-operation-stripes {
+  from { background-position: 0 0; }
+  to { background-position: 24px 0; }
+}
+
+/* The same moving black/white diagonal treatment is used on an action button
+   and in the left source list while an Instagram operation is running. */
+.cc-operation-running {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.cc-operation-running::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.17;
+  background: repeating-linear-gradient(135deg, #000 0 6px, #fff 6px 12px);
+  background-size: 24px 24px;
+  animation: cc-operation-stripes 650ms linear infinite;
+}
+
+.cc-operation-running > * {
+  position: relative;
+  z-index: 1;
+}
+
+.source-item.is-operation-running {
+  box-shadow: inset 3px 0 0 #111;
+}
+
+.source-operation-badge {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  min-width: 44px;
+  margin-left: 6px;
+  padding: 2px 5px;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  background: repeating-linear-gradient(135deg, #111 0 5px, #fff 5px 10px);
+  background-size: 20px 20px;
+  color: #111;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+  animation: cc-operation-stripes 650ms linear infinite;
+}
+
 .instagram-downloaded-media {
   display: flex;
   align-items: center;
@@ -250,5 +303,10 @@
   .right-panel:has(#note-textarea:disabled),
   .comment-card {
     transition: none;
+  }
+
+  .cc-operation-running::after,
+  .source-operation-badge {
+    animation: none;
   }
 }
