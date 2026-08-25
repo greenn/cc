@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CC Browser Helper",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "Browser helper for CC — Comment Collection. Uses the signed-in browser session to collect comments and explicitly requested media from supported sites such as Instagram.",
   "permissions": ["tabs", "scripting", "downloads", "downloads.open"],
   "host_permissions": [
@@ -31,7 +31,7 @@
         "https://www.instagram.com/*",
         "https://instagram.com/*"
       ],
-      "js": ["instagram-scraper.js", "instagram-media.js"],
+      "js": ["instagram-dom-pruner.js", "instagram-scraper.js", "instagram-media.js"],
       "run_at": "document_idle"
     }
   ],
