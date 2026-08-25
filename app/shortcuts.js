@@ -4,12 +4,23 @@ const buttonHost = document.querySelector('.left-bottom');
 const settingsButton = document.querySelector('#settings-button');
 const contentArea = document.querySelector('#content-area');
 const SETTING_KEY = 'commentShortcutsEnabled';
+let navigationHint = null;
 
-function isEnabled() {
-  return Boolean(store.getSettings()?.[SETTING_KEY]);
+function readEnabled() {
+  try {
+    return Boolean(store.getSettings()?.[SETTING_KEY]);
+  } catch (error) {
+    console.warn('[CC shortcuts] settings status unavailable', error);
+    return null;
+  }
 }
 
-function legend(enabled = isEnabled()) {
+function isEnabled() {
+  return readEnabled() === true;
+}
+
+function legend(enabled = readEnabled()) {
+  if (enabled === null) return 'Shortcuts status unavailable';
   return [
     `Shortcuts ${enabled ? 'ON' : 'OFF'}`,
     '← Delete comment',
@@ -23,28 +34,41 @@ function legend(enabled = isEnabled()) {
 function updateButton() {
   const button = document.querySelector('#shortcuts-button');
   if (!button) return;
-  const enabled = isEnabled();
-  button.classList.toggle('is-active', enabled);
-  button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  const enabled = readEnabled();
+  const known = enabled !== null;
+  button.disabled = !known;
+  button.classList.toggle('is-active', enabled === true);
+  button.setAttribute('aria-pressed', enabled === true ? 'true' : 'false');
   button.title = legend(enabled);
 }
 
 function installButton() {
-  if (!buttonHost || document.querySelector('#shortcuts-button')) return;
+  if (!buttonHost) return;
 
-  const button = document.createElement('button');
-  button.className = 'nav-item';
-  button.id = 'shortcuts-button';
-  button.type = 'button';
-  button.setAttribute('aria-pressed', 'false');
-  button.innerHTML = '<span class="nav-icon">⌨</span><span>Shortcuts</span>';
-  button.addEventListener('click', () => {
-    store.setSettings({ [SETTING_KEY]: !isEnabled() });
-    updateButton();
-  });
+  let button = document.querySelector('#shortcuts-button');
+  if (!button) {
+    button = document.createElement('button');
+    button.className = 'nav-item';
+    button.id = 'shortcuts-button';
+    button.type = 'button';
+    button.disabled = true;
+    button.setAttribute('aria-pressed', 'false');
+    button.title = 'Shortcuts status unavailable';
+    button.innerHTML = '<span class="nav-icon">⌨</span><span>Shortcuts</span>';
+    if (settingsButton?.parentElement === buttonHost) settingsButton.insertAdjacentElement('afterend', button);
+    else buttonHost.appendChild(button);
+  }
 
-  if (settingsButton?.parentElement === buttonHost) settingsButton.insertAdjacentElement('afterend', button);
-  else buttonHost.appendChild(button);
+  if (button.dataset.shortcutsBound !== '1') {
+    button.dataset.shortcutsBound = '1';
+    button.addEventListener('click', () => {
+      const enabled = readEnabled();
+      if (enabled === null) return;
+      store.setSettings({ [SETTING_KEY]: !enabled });
+      updateButton();
+    });
+  }
+
   updateButton();
 }
 
@@ -72,6 +96,22 @@ function topVisibleCard(cards = commentCards()) {
   return visible[0]?.card || cards[0];
 }
 
+function navigationContext() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('comment');
+  return `${url.pathname}?${url.searchParams.toString()}`;
+}
+
+function rememberIndex(index) {
+  if (!Number.isInteger(index) || index < 0) return;
+  navigationHint = { index, context: navigationContext() };
+}
+
+function rememberedIndex() {
+  if (!navigationHint || navigationHint.context !== navigationContext()) return null;
+  return navigationHint.index;
+}
+
 function selectedOrTopVisibleCard() {
   const cards = commentCards();
   if (!cards.length) return null;
@@ -79,8 +119,12 @@ function selectedOrTopVisibleCard() {
 }
 
 function performAction(action) {
-  const card = selectedOrTopVisibleCard();
+  const cards = commentCards();
+  const card = cards.find((item) => item.classList.contains('is-selected')) || topVisibleCard(cards);
   if (!card) return false;
+
+  const index = cards.indexOf(card);
+  if (index >= 0) rememberIndex(index);
 
   if (action === 'save') {
     const save = card.querySelector('[data-action="save"]');
@@ -104,21 +148,46 @@ function navigateComments(direction) {
   if (!cards.length) return false;
 
   const selectedIndex = cards.findIndex((card) => card.classList.contains('is-selected'));
-  let target = null;
+  let targetIndex = null;
 
-  if (selectedIndex < 0) {
-    target = topVisibleCard(cards);
+  if (selectedIndex >= 0) {
+    targetIndex = selectedIndex + direction;
   } else {
-    const nextIndex = selectedIndex + direction;
-    if (nextIndex < 0 || nextIndex >= cards.length) return true;
-    target = cards[nextIndex];
+    const hint = rememberedIndex();
+    if (hint !== null) {
+      // After deleting item N, the former N+1 moves into index N. Down should
+      // therefore continue at N, while Up should go to N-1.
+      targetIndex = direction > 0 ? hint : hint - 1;
+    } else {
+      const top = topVisibleCard(cards);
+      targetIndex = top ? cards.indexOf(top) : 0;
+    }
   }
 
+  if (targetIndex < 0 || targetIndex >= cards.length) return true;
+  const target = cards[targetIndex];
   if (!target) return false;
+
+  rememberIndex(targetIndex);
   target.click();
   target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
   return true;
 }
+
+// Capture the position before the app rerenders after a manual Delete click.
+// This keeps Up/Down anchored at the deleted comment's position, not at the
+// top of the list.
+document.addEventListener('click', (event) => {
+  const card = event.target.closest?.('#comments-list .comment-card');
+  if (!card) return;
+  const cards = commentCards();
+  const index = cards.indexOf(card);
+  if (index < 0) return;
+
+  if (event.target.closest?.('[data-action="delete"]') || !event.target.closest?.('[data-action]')) {
+    rememberIndex(index);
+  }
+}, true);
 
 document.addEventListener('keydown', (event) => {
   if (!isEnabled()) return;
@@ -139,4 +208,4 @@ document.addEventListener('keydown', (event) => {
 
 installButton();
 
-console.info('[CC shortcuts] ready', { enabled: isEnabled(), legend: legend() });
+console.info('[CC shortcuts] ready', { enabled: readEnabled(), legend: legend() });
