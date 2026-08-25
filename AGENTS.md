@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.20`.
+Current baseline version: `0.5.21`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.20`;
-- another change on the same day: `0.5.21`;
+- current version: `0.5.21`;
+- another change on the same day: `0.5.22`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -72,6 +72,7 @@ These are default product conventions for applications we build:
 - A helper-created temporary Instagram tab should be closed after the scrape completes.
 - If the user manually activates the helper-created Instagram worker tab, allow that manual interaction. Do not yank focus back to CC while the user is helping the worker by scrolling.
 - Manual user scrolling in the worker tab is valid input: the collector keeps rescanning the currently rendered comment DOM and incorporates comments revealed by the user's movement.
+- While Refresh or Load more is running for the current Instagram source, expose an `Open worker` action beside the source controls. It focuses the already-created temporary worker tab for that source; it must never create an additional Instagram tab. If the worker is still opening, the helper may wait briefly for it to register. Once the user focuses the worker this way, treat it as manual focus and let the user stay on that tab until the worker finishes or is closed.
 - Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
 - A zero-comment scrape is not proof that the Instagram source was deleted. Keep the source and leave Refresh available; do not offer destructive deletion based only on missing rendered comment markup.
 - For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
