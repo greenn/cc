@@ -1,9 +1,10 @@
-const VERSION = '0.5.3';
+const VERSION = '0.5.4';
 
 const modules = [
   './boot-route.js',
   './avatar-policy.js',
   './app.js',
+  './source-groups.js',
   './source-meta.js',
   './instagram-media.js',
   './vk-settings.js',
