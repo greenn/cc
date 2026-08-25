@@ -155,8 +155,8 @@ function navigateComments(direction) {
   } else {
     const hint = rememberedIndex();
     if (hint !== null) {
-      // After deleting item N, the former N+1 moves into index N. Down should
-      // therefore continue at N, while Up should go to N-1.
+      // If item N disappeared after Delete/Save/Highlight, the former N+1
+      // moves into index N. Down continues at N; Up goes to N-1.
       targetIndex = direction > 0 ? hint : hint - 1;
     } else {
       const top = topVisibleCard(cards);
@@ -174,9 +174,9 @@ function navigateComments(direction) {
   return true;
 }
 
-// Capture the position before the app rerenders after a manual Delete click.
-// This keeps Up/Down anchored at the deleted comment's position, not at the
-// top of the list.
+// Capture the position before an action can remove the card from the current
+// rendered feed. This keeps Up/Down anchored at that position instead of
+// restarting from the top.
 document.addEventListener('click', (event) => {
   const card = event.target.closest?.('#comments-list .comment-card');
   if (!card) return;
@@ -184,9 +184,8 @@ document.addEventListener('click', (event) => {
   const index = cards.indexOf(card);
   if (index < 0) return;
 
-  if (event.target.closest?.('[data-action="delete"]') || !event.target.closest?.('[data-action]')) {
-    rememberIndex(index);
-  }
+  const action = event.target.closest?.('[data-action]')?.dataset.action || '';
+  if (['delete', 'save', 'highlight'].includes(action) || !action) rememberIndex(index);
 }, true);
 
 document.addEventListener('keydown', (event) => {
