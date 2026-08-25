@@ -1,7 +1,8 @@
-const VERSION = '0.5.2';
+const VERSION = '0.5.3';
 
 const modules = [
   './boot-route.js',
+  './layout.js',
   './avatar-policy.js',
   './app.js',
   './source-meta.js',
