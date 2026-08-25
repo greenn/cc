@@ -25,7 +25,42 @@ function readState() {
   }
 }
 
-let state = readState();
+function normalizedUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeLegacyInstagramMedia(input) {
+  const sourceById = new Map((input.sources || []).map((source) => [source.id, source]));
+  for (const [sourceId, comments] of Object.entries(input.comments || {})) {
+    const source = sourceById.get(sourceId);
+    if (source?.platform !== 'instagram' || !Array.isArray(comments)) continue;
+    const sourceUrl = normalizedUrl(source.url);
+
+    input.comments[sourceId] = comments.filter((comment) => {
+      if (comment?.originalUrl && sourceUrl && normalizedUrl(comment.originalUrl) === sourceUrl) {
+        comment.originalUrl = '';
+      }
+
+      if (comment?.attachmentScope === 'comment') return true;
+      if (Array.isArray(comment?.attachments) && comment.attachments.length) comment.attachments = [];
+
+      const hasText = Boolean(String(comment?.text || '').trim());
+      const hasTime = Boolean(String(comment?.publishedAt || '').trim());
+      const hasNote = Boolean(String(comment?.note || '').trim());
+      return hasText || hasTime || hasNote;
+    });
+  }
+  return input;
+}
+
+let state = sanitizeLegacyInstagramMedia(readState());
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
