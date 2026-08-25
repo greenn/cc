@@ -117,10 +117,35 @@ function rememberedIndex() {
   return navigationHint.index;
 }
 
-function selectedOrTopVisibleCard() {
-  const cards = commentCards();
-  if (!cards.length) return null;
-  return cards.find((card) => card.classList.contains('is-selected')) || topVisibleCard(cards);
+function selectReplacementAfterRemoval(index, removedCard) {
+  if (!Number.isInteger(index) || index < 0) return;
+  let attempts = 0;
+
+  const selectWhenReady = () => {
+    const cards = commentCards();
+    const removedGone = !removedCard?.isConnected || !cards.includes(removedCard);
+
+    if (!removedGone && attempts < 12) {
+      attempts += 1;
+      setTimeout(selectWhenReady, 25);
+      return;
+    }
+
+    if (!cards.length) return;
+
+    // After removing item N, the former N+1 occupies the same array index.
+    // Select that card immediately so repeated Left/Delete continues forward
+    // through the feed rather than appearing to jump back to N-1.
+    const targetIndex = Math.min(index, cards.length - 1);
+    const target = cards[targetIndex];
+    if (!target) return;
+
+    rememberIndex(targetIndex);
+    target.click();
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  };
+
+  requestAnimationFrame(() => requestAnimationFrame(selectWhenReady));
 }
 
 function performAction(action) {
@@ -149,6 +174,7 @@ function performAction(action) {
     const remove = card.querySelector('[data-action="delete"]');
     if (!remove) return false;
     remove.click();
+    if (index >= 0) selectReplacementAfterRemoval(index, card);
     return true;
   }
 
