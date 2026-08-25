@@ -3,6 +3,36 @@
   window.__CC_INSTAGRAM_SCRAPER_INSTALLED__ = true;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let lastProgressAt = 0;
+  let lastProgressSignature = '';
+
+  function reportProgress(sourceId, progress = {}, force = false) {
+    if (!sourceId) return;
+    const payload = {
+      phase: String(progress.phase || 'collecting'),
+      collected: Math.max(0, Number(progress.collected || 0)),
+      clicks: Math.max(0, Number(progress.clicks || 0)),
+      scrollMoves: Math.max(0, Number(progress.scrollMoves || 0)),
+      step: Math.max(0, Number(progress.step || 0)),
+      maxSteps: Math.max(0, Number(progress.maxSteps || 0)),
+      stableRounds: Math.max(0, Number(progress.stableRounds || 0)),
+      stableLimit: Math.max(0, Number(progress.stableLimit || 0)),
+      timestamp: Date.now(),
+    };
+    const signature = `${payload.phase}:${payload.collected}:${payload.clicks}:${payload.scrollMoves}:${payload.step}`;
+    const now = Date.now();
+    if (!force && now - lastProgressAt < 280 && signature === lastProgressSignature) return;
+    if (!force && now - lastProgressAt < 180) return;
+    lastProgressAt = now;
+    lastProgressSignature = signature;
+    chrome.runtime.sendMessage({
+      type: 'CC_INSTAGRAM_PROGRESS',
+      sourceId,
+      progress: payload,
+    }, () => {
+      void chrome.runtime.lastError;
+    });
+  }
 
   function simpleHash(value) {
     let hash = 2166136261;
@@ -320,6 +350,10 @@
     while (Date.now() < deadline) {
       if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
       mergeComments(accumulator, collect(url, sourceId));
+      reportProgress(sourceId, {
+        phase: accumulator.size > 0 ? 'collecting' : 'waiting-comments',
+        collected: accumulator.size,
+      }, accumulator.size > 0);
       if (accumulator.size > 0 || moreButtons().length > 0) return;
       if (isReelPage() && !commentsPanelOpen()) await openReelCommentsIfNeeded(2500);
       await sleep(500);
@@ -329,6 +363,7 @@
   async function loadAndCollect(url, sourceId, maxClicks) {
     if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
 
+    reportProgress(sourceId, { phase: 'opening-comments', collected: 0 }, true);
     const reelPanel = await openReelCommentsIfNeeded();
     const accumulator = new Map();
     await waitForInitialComments(url, sourceId, accumulator);
@@ -342,28 +377,55 @@
     const deepMode = maxClicks > 40;
     let steps = 0;
 
+    reportProgress(sourceId, {
+      phase: 'collecting',
+      collected: accumulator.size,
+      clicks,
+      scrollMoves,
+      step: 0,
+      maxSteps,
+      stableRounds,
+      stableLimit,
+    }, true);
+
     for (; steps < maxSteps && stableRounds < stableLimit; steps += 1) {
       if (isLoggedOut()) break;
       if (isReelPage() && !commentsPanelOpen()) await openReelCommentsIfNeeded(3500);
 
       mergeComments(accumulator, collect(url, sourceId));
+      const sizeAtStepStart = accumulator.size;
       let progressed = accumulator.size > previousSize;
       previousSize = accumulator.size;
+      let phase = 'checking';
 
       const buttons = moreButtons();
       if (buttons.length && clicks < maxClicks) {
         try {
+          phase = 'expanding';
           buttons[0].scrollIntoView({ block: 'center', inline: 'nearest' });
           await sleep(120);
           buttons[0].click();
           clicks += 1;
           progressed = true;
+          reportProgress(sourceId, {
+            phase,
+            collected: accumulator.size,
+            clicks,
+            scrollMoves,
+            step: steps + 1,
+            maxSteps,
+            stableRounds,
+            stableLimit,
+          }, true);
           await sleep(deepMode ? 700 : 850);
           mergeComments(accumulator, collect(url, sourceId));
-        } catch { /* try scrolling instead */ }
+        } catch {
+          phase = 'scrolling';
+        }
       } else {
         const scroller = commentScroller();
         if (scroller) {
+          phase = 'scrolling';
           const before = scroller.scrollTop;
           const beforeHeight = scroller.scrollHeight;
           const multiplier = deepMode ? 1.2 : 0.82;
@@ -374,6 +436,7 @@
             scrollMoves += 1;
             progressed = true;
           } else if (deepMode) {
+            phase = 'waiting-more';
             // At a temporary bottom Instagram can still append another chunk a
             // moment later. Give deep-load passes a little more time before
             // deciding that the list is stable.
@@ -381,6 +444,7 @@
           }
           mergeComments(accumulator, collect(url, sourceId));
         } else {
+          phase = 'waiting-panel';
           await sleep(deepMode ? 900 : 650);
         }
       }
@@ -388,6 +452,17 @@
       if (accumulator.size > previousSize) progressed = true;
       previousSize = accumulator.size;
       stableRounds = progressed ? 0 : stableRounds + 1;
+
+      reportProgress(sourceId, {
+        phase,
+        collected: accumulator.size,
+        clicks,
+        scrollMoves,
+        step: steps + 1,
+        maxSteps,
+        stableRounds,
+        stableLimit,
+      }, accumulator.size !== sizeAtStepStart);
     }
 
     mergeComments(accumulator, collect(url, sourceId));
@@ -414,6 +489,17 @@
       stableLimit,
       stoppedBy: steps >= maxSteps ? 'step-limit' : stableRounds >= stableLimit ? 'stable' : 'other',
     };
+
+    reportProgress(sourceId, {
+      phase: 'complete',
+      collected: comments.length,
+      clicks,
+      scrollMoves,
+      step: steps,
+      maxSteps,
+      stableRounds,
+      stableLimit,
+    }, true);
 
     return {
       comments,
