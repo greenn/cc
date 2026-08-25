@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.1`.
+Current baseline version: `0.5.2`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.1`;
-- another change on the same day: `0.5.2`;
+- current version: `0.5.2`;
+- another change on the same day: `0.5.3`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -76,6 +76,15 @@ These are default product conventions for applications we build:
 - Keep vertical scrolling natural and preserve mouse text selection inside comment text; mouse drag can start from the rest of the card.
 - A Save gesture must not toggle an already-saved comment back to unsaved.
 - Gesture click suppression must only suppress the browser's follow-up click after `pointerup`; never set the suppression flag before invoking the intended Save/Delete action, or the gesture will animate without changing state.
+
+## Comment translation
+
+- Each comment has a `Translate` action directly after `Highlight`.
+- Translation target is Russian.
+- Use Chrome's built-in Language Detector + Translator APIs when available so comment text is translated locally in the desktop browser.
+- The first translation for a language pair may download the required local language pack; expose progress through the Translate button while it is preparing.
+- Cache the Russian translation in the comment's local CC state. Do not translate the same comment again on every toggle.
+- When translation is active, underline the `Translate` button and show the Russian text. Pressing it again restores the original text without deleting the cached translation.
 
 ## Avatar loading policy
 
