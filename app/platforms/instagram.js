@@ -16,6 +16,27 @@ function parseInstagramTarget(value) {
   return { externalId, kind, username };
 }
 
+function helperTargetUrl(value) {
+  const url = new URL(value);
+  // Instagram's plural /reels/<id>/ route behaves like a feed and is much
+  // less stable for background comment loading. The same item has a canonical
+  // single-Reel route, which is better suited for the temporary worker tab.
+  url.pathname = url.pathname.replace(/^\/reels\//i, '/reel/');
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+function showCollectWarning(message) {
+  const banner = document.querySelector('#status-banner');
+  if (!banner) return;
+  banner.textContent = message;
+  banner.dataset.kind = 'error';
+  banner.hidden = false;
+  clearTimeout(showCollectWarning.timer);
+  showCollectWarning.timer = setTimeout(() => { banner.hidden = true; }, 12000);
+}
+
 export const instagramAdapter = {
   id: 'instagram',
   label: 'Instagram',
@@ -49,9 +70,6 @@ export const instagramAdapter = {
       loadedCount: 0,
       nextCursor: 'helper',
       hasMore: true,
-      // Adding/opening an Instagram source must stay inside CC. Automatic loads
-      // are intentionally deferred; only an explicit Refresh asks the helper
-      // to visit Instagram and collect rendered comments.
       integrationStatus: 'helper-pending',
       lastVisibleCommentId: null,
       lastOpenedAt: null,
@@ -61,10 +79,6 @@ export const instagramAdapter = {
   },
 
   async getComments(source, cursor = source?.nextCursor) {
-    // app.js passes the stored cursor for automatic/add/open loads and null for
-    // an explicit Refresh. Keep the automatic path a true no-op while leaving
-    // hasMore=true, so clicking a source never launches Instagram and does not
-    // permanently turn a newly-added 0/0 source into a finished source.
     if (cursor !== null) {
       return {
         comments: [],
@@ -75,10 +89,10 @@ export const instagramAdapter = {
     }
 
     const result = await helperRequest('instagram.collect', {
-      url: source.url,
+      url: helperTargetUrl(source.url),
       sourceId: source.id,
       maxClicks: 40,
-    }, 120000);
+    }, 180000);
 
     if (result?.mediaAvailability) {
       window.dispatchEvent(new CustomEvent('cc:instagram-media-availability', {
@@ -94,13 +108,21 @@ export const instagramAdapter = {
       const diagnostic = result?.diagnostics || {};
       const details = [
         Number.isFinite(Number(diagnostic.commentCandidates)) ? `candidates ${diagnostic.commentCandidates}` : '',
-        Number.isFinite(Number(diagnostic.permalinkAnchors)) ? `permalinks ${diagnostic.permalinkAnchors}` : '',
         Number.isFinite(Number(diagnostic.timestamps)) ? `timestamps ${diagnostic.timestamps}` : '',
         diagnostic.reelPage
-          ? `reel comments ${diagnostic.commentsPanelOpen ? 'open' : diagnostic.commentsPanelClickAttempted ? 'click attempted' : 'button not found'}`
+          ? `reel panel ${diagnostic.commentsPanelOpen ? 'open' : diagnostic.commentsPanelClickAttempted ? 'click attempted' : 'button not found'}`
           : '',
       ].filter(Boolean).join(' · ');
-      throw new Error(`Instagram helper found no comments${details ? ` (${details})` : ''}. Make sure comments are visible on the post/reel and that CC Browser Helper is reloaded to the latest version.`);
+
+      // Zero parsed comments is not evidence that the post was deleted. Keep
+      // the source refreshable and never offer destructive deletion here.
+      showCollectWarning(`Instagram returned no parsed comments${details ? ` (${details})` : ''}. The source was kept; try Refresh again if Instagram was still loading.`);
+      return {
+        comments: [],
+        nextCursor: 'helper',
+        hasMore: true,
+        totalResults: null,
+      };
     }
 
     return {
