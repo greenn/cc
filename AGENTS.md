@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.15`.
+Current baseline version: `0.5.16`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.15`;
-- another change on the same day: `0.5.16`;
+- current version: `0.5.16`;
+- another change on the same day: `0.5.17`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -82,6 +82,14 @@ These are default product conventions for applications we build:
 - Reel media counts represent logical media in that Reel, not every media/resource request made by the Instagram page. A normal single-video Reel should report one video and zero photos; never count CDN/resource-timing requests as separate Reel videos.
 - Instagram operations are tracked per source, not globally. Different Instagram sources may run Refresh/media operations concurrently, with one independent temporary Browser Helper worker tab per request. Prevent duplicate execution of the same operation on the same source while it is already running.
 - While an Instagram Refresh/Load more/Video/Photos operation is active, show only a compact animated 3px diagonal black/white bar along the bottom of the initiating action and the corresponding source item in the left list. Navigating to another source must not stop the background operation or lose its processing marker.
+
+## Comment author accounts
+
+- When a source is open, expose an `Accounts · N` action in the source header, where `N` is the number of distinct commenter accounts already present in local CC data for that source.
+- The Accounts view is derived locally from all collected comments for the source, including comments that are currently Saved or Deleted; changing a reading filter must not change the author totals.
+- Group primarily by normalized `authorUsername`; fall back to `authorName` when a username is unavailable.
+- Sort accounts by comment count descending, then by name.
+- Show a compact table with `Name`, `Account`, and `Comments` columns. For Instagram usernames, the account value may link to the public Instagram profile in a new tab.
 
 ## Saved/highlighted comment flow
 
