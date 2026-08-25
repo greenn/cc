@@ -30,11 +30,7 @@
     if (!force && now - lastProgressAt < 180) return;
     lastProgressAt = now;
     lastProgressSignature = signature;
-    chrome.runtime.sendMessage({
-      type: 'CC_INSTAGRAM_PROGRESS',
-      sourceId,
-      progress: payload,
-    }, () => {
+    chrome.runtime.sendMessage({ type: 'CC_INSTAGRAM_PROGRESS', sourceId, progress: payload }, () => {
       void chrome.runtime.lastError;
     });
   }
@@ -49,11 +45,7 @@
         passId,
         batchId: `${passId || sourceId}:${Date.now()}:${nextBatchId++}`,
         comments: chunk,
-        meta: {
-          ...meta,
-          batchSize: chunk.length,
-          timestamp: Date.now(),
-        },
+        meta: { ...meta, batchSize: chunk.length, timestamp: Date.now() },
       }, () => {
         void chrome.runtime.lastError;
       });
@@ -126,12 +118,10 @@
       if (!label || /add (?:a )?comment|добавить комментар/i.test(label)) return;
       if (/^(?:view )?comments?$|^comment$|комментари|комментировать/i.test(label)) push(node);
     });
-
     document.querySelectorAll('svg[aria-label]').forEach((node) => {
       const label = node.getAttribute('aria-label') || '';
       if (/^(?:view )?comments?$|^comment$|комментари|комментировать/i.test(label)) push(node);
     });
-
     return found[0] || null;
   }
 
@@ -208,8 +198,23 @@
     }
   }
 
-  function isProfileImage(image) {
-    const anchor = image.closest('a[href]');
+  function srcsetUrl(value) {
+    const candidates = String(value || '').split(',')
+      .map((part) => part.trim().split(/\s+/)[0])
+      .map(safeHttpUrl)
+      .filter(Boolean);
+    return candidates[candidates.length - 1] || '';
+  }
+
+  function backgroundImageUrl(node) {
+    if (!(node instanceof Element)) return '';
+    const value = getComputedStyle(node).backgroundImage || '';
+    const match = value.match(/url\(["']?(.*?)["']?\)/i);
+    return safeHttpUrl(match?.[1] || '');
+  }
+
+  function isProfileMedia(node) {
+    const anchor = node?.closest?.('a[href]');
     if (!anchor) return false;
     const href = anchor.getAttribute('href') || '';
     return /^\/[A-Za-z0-9._]+\/?(?:\?.*)?$/.test(href)
@@ -221,27 +226,61 @@
   function extractAttachments(node, authorAnchor) {
     const attachments = [];
     const seen = new Set();
-    const add = (type, url, alt = '') => {
-      const safe = safeHttpUrl(url);
-      if (!safe || seen.has(safe)) return;
-      seen.add(safe);
-      attachments.push({ type, url: safe, alt: String(alt || '').trim() });
+    const add = (type, url, previewUrl = '', alt = '') => {
+      const direct = safeHttpUrl(url);
+      const preview = safeHttpUrl(previewUrl);
+      if (!direct && !preview) return;
+      const key = `${type}:${direct || preview}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      attachments.push({
+        type: type === 'video' ? 'video' : 'image',
+        url: direct,
+        previewUrl: preview,
+        alt: String(alt || '').trim(),
+      });
     };
 
-    for (const image of node.querySelectorAll('img[src]')) {
-      if (authorAnchor?.contains(image) || isProfileImage(image)) continue;
-      const alt = image.getAttribute('alt') || '';
+    for (const image of node.querySelectorAll('img')) {
+      if (authorAnchor?.contains(image) || isProfileMedia(image)) continue;
+      const alt = image.getAttribute('alt') || image.getAttribute('aria-label') || '';
       const rect = image.getBoundingClientRect();
       const width = Number(rect.width || image.naturalWidth || 0);
       const height = Number(rect.height || image.naturalHeight || 0);
-      const explicitGraphic = /gif|sticker|стикер|animation|анимац/i.test(alt);
-      if (!explicitGraphic && Math.max(width, height) < 56) continue;
-      add('image', image.currentSrc || image.src, alt);
+      const explicitGraphic = /gif|giphy|sticker|стикер|animation|анимац|image|photo|изображ/i.test(alt);
+      if (!explicitGraphic && Math.max(width, height) < 24) continue;
+      const url = safeHttpUrl(image.currentSrc || image.src) || srcsetUrl(image.getAttribute('srcset'));
+      add('image', url, '', alt);
+    }
+
+    for (const source of node.querySelectorAll('picture source[srcset]')) {
+      if (authorAnchor?.contains(source) || isProfileMedia(source)) continue;
+      add('image', srcsetUrl(source.getAttribute('srcset')), '', source.getAttribute('aria-label') || '');
+    }
+
+    for (const graphic of node.querySelectorAll('[role="img"]')) {
+      if (authorAnchor?.contains(graphic) || isProfileMedia(graphic)) continue;
+      const alt = graphic.getAttribute('aria-label') || graphic.getAttribute('title') || '';
+      const url = backgroundImageUrl(graphic);
+      if (url) add('image', url, '', alt);
     }
 
     for (const video of node.querySelectorAll('video')) {
-      const url = video.currentSrc || video.src || video.querySelector('source[src]')?.src || '';
-      add('video', url, video.getAttribute('aria-label') || '');
+      if (authorAnchor?.contains(video) || isProfileMedia(video)) continue;
+      const direct = safeHttpUrl(video.currentSrc)
+        || safeHttpUrl(video.src)
+        || safeHttpUrl(video.querySelector('source[src]')?.src)
+        || safeHttpUrl(video.querySelector('source[src]')?.getAttribute('src'));
+      const preview = safeHttpUrl(video.poster);
+      add('video', direct, preview, video.getAttribute('aria-label') || video.getAttribute('title') || '');
+    }
+
+    for (const link of node.querySelectorAll('a[href]')) {
+      if (link === authorAnchor || isProfileMedia(link)) continue;
+      const href = safeHttpUrl(link.getAttribute('href'));
+      if (!href) continue;
+      if (/\.(?:gif|gifv|webp|jpe?g|png)(?:$|[?#])/i.test(href)) add('image', href, '', link.getAttribute('aria-label') || '');
+      if (/\.(?:mp4|webm|mov)(?:$|[?#])/i.test(href)) add('video', href, '', link.getAttribute('aria-label') || '');
     }
 
     return attachments;
@@ -279,21 +318,21 @@
     const username = usernameFromAnchor(author);
     if (!username) return Infinity;
     const raw = (node.innerText || '').trim();
-    if (raw.length > 3000) return Infinity;
+    if (raw.length > 3500) return Infinity;
     if (!node.querySelector('time') && !commentPermalink(node)) return Infinity;
     const text = cleanCandidateText(node, username);
     const attachments = extractAttachments(node, author);
     if (!text && !attachments.length) return Infinity;
     const profiles = node.querySelectorAll('a[href^="/"]').length;
     if (profiles > 10) return Infinity;
-    return Math.max(1, raw.length) + profiles * 320 - (commentPermalink(node) ? 180 : 0) - attachments.length * 40;
+    return Math.max(1, raw.length) + profiles * 320 - (commentPermalink(node) ? 180 : 0) - attachments.length * 60;
   }
 
   function nearestCommentContainer(seed, root) {
     let node = seed?.nodeType === Node.ELEMENT_NODE ? seed : seed?.parentElement;
     let best = null;
     let bestScore = Infinity;
-    for (let depth = 0; node && depth < 12; depth += 1, node = node.parentElement) {
+    for (let depth = 0; node && depth < 14; depth += 1, node = node.parentElement) {
       if (root && !root.contains(node)) break;
       const score = candidateScore(node);
       if (score < bestScore) {
@@ -308,18 +347,14 @@
   function commentRoots() {
     const dialog = commentsDialog();
     if (dialog) return [dialog];
-    return [
-      document.querySelector('main article'),
-      document.querySelector('article'),
-      document.querySelector('main'),
-    ].filter(Boolean);
+    return [document.querySelector('main article'), document.querySelector('article'), document.querySelector('main')].filter(Boolean);
   }
 
   function commentNodes() {
     const seen = new Set();
     const nodes = [];
     const push = (node) => {
-      if (!node || seen.has(node) || !profileAnchor(node)) return;
+      if (!node || seen.has(node) || candidateScore(node) === Infinity) return;
       seen.add(node);
       nodes.push(node);
     };
@@ -328,6 +363,7 @@
       root.querySelectorAll('ul li').forEach(push);
       root.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').forEach((anchor) => push(nearestCommentContainer(anchor, root)));
       root.querySelectorAll('time').forEach((time) => push(nearestCommentContainer(time, root)));
+      root.querySelectorAll('img, video, [role="img"], picture source[srcset]').forEach((media) => push(nearestCommentContainer(media, root)));
     }
     return nodes;
   }
@@ -351,9 +387,11 @@
         try {
           originalUrl = new URL(permalink.getAttribute('href'), location.origin).toString();
           explicitId = originalUrl;
-        } catch { /* keep source URL */ }
+        } catch {
+          // Keep the source URL.
+        }
       }
-      const attachmentKey = attachments.map((item) => item.url).join('|');
+      const attachmentKey = attachments.map((item) => `${item.type}:${item.url || item.previewUrl}`).join('|');
       const platformCommentId = explicitId || simpleHash(`${username}\n${publishedAt || ''}\n${text}\n${attachmentKey}`);
       if (seen.has(platformCommentId)) continue;
       seen.add(platformCommentId);
@@ -448,21 +486,9 @@
     try {
       if (!hadTabIndex) scroller.setAttribute('tabindex', '-1');
       scroller.focus({ preventScroll: true });
-      scroller.dispatchEvent(new KeyboardEvent('keydown', {
-        key: 'PageDown',
-        code: 'PageDown',
-        keyCode: 34,
-        which: 34,
-        bubbles: true,
-      }));
+      scroller.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown', code: 'PageDown', keyCode: 34, which: 34, bubbles: true }));
       scroller.scrollBy({ top: Math.max(320, scroller.clientHeight * 0.92), behavior: 'auto' });
-      scroller.dispatchEvent(new KeyboardEvent('keyup', {
-        key: 'PageDown',
-        code: 'PageDown',
-        keyCode: 34,
-        which: 34,
-        bubbles: true,
-      }));
+      scroller.dispatchEvent(new KeyboardEvent('keyup', { key: 'PageDown', code: 'PageDown', keyCode: 34, which: 34, bubbles: true }));
     } catch {
       scroller.scrollTop = Math.min(scroller.scrollHeight, before + Math.max(320, scroller.clientHeight * 0.92));
     } finally {
@@ -489,12 +515,12 @@
     }
   }
 
-  async function loadAndCollect(url, sourceId, maxClicks, requestedPassId = '', pageDownOnly = false) {
+  async function loadAndCollect(url, sourceId, maxClicks, requestedPassId = '') {
     if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
 
     const passId = String(requestedPassId || `${sourceId || 'instagram'}:${Date.now()}`);
     const streamedIds = new Set();
-    reportProgress(sourceId, { passId, phase: pageDownOnly ? 'page-down' : 'opening-comments', collected: 0, streamed: 0 }, true);
+    reportProgress(sourceId, { passId, phase: 'opening-comments', collected: 0, streamed: 0 }, true);
     const reelPanel = await openReelCommentsIfNeeded();
     const accumulator = new Map();
     await waitForInitialComments(url, sourceId, accumulator, streamedIds, passId);
@@ -513,7 +539,7 @@
 
     reportProgress(sourceId, {
       passId,
-      phase: pageDownOnly ? 'page-down' : 'collecting',
+      phase: 'collecting',
       collected: accumulator.size,
       streamed: streamedIds.size,
       clicks,
@@ -536,7 +562,7 @@
       previousSize = accumulator.size;
       let phase = 'checking';
 
-      const buttons = pageDownOnly ? [] : moreButtons();
+      const buttons = moreButtons();
       if (buttons.length && clicks < maxClicks) {
         try {
           phase = 'expanding';
@@ -576,7 +602,7 @@
           }
 
           const beforeHeight = scroller.scrollHeight;
-          const usePageDown = pageDownOnly || (steps + 1) % 7 === 0;
+          const usePageDown = (steps + 1) % 7 === 0;
           if (usePageDown) {
             phase = 'page-down';
             if (pageDownScroller(scroller)) {
@@ -630,18 +656,19 @@
     mergeAndStream(accumulator, collect(url, sourceId), sourceId, passId, streamedIds, { phase: 'complete', step: steps });
     const comments = [...accumulator.values()];
     const scroller = commentScroller();
+    const attachmentCount = comments.reduce((sum, comment) => sum + (Array.isArray(comment.attachments) ? comment.attachments.length : 0), 0);
     const diagnostics = {
       commentCandidates: commentNodes().length,
       permalinkAnchors: document.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').length,
       timestamps: document.querySelectorAll('time').length,
       parsedComments: comments.length,
+      attachmentCount,
       streamedComments: streamedIds.size,
       loadButtons: moreButtons().length,
       loggedOut: isLoggedOut(),
       reelPage: reelPanel.reelPage,
       commentsPanelClickAttempted: reelPanel.clickAttempted,
       commentsPanelOpen: commentsPanelOpen(),
-      pageDownOnly,
       scrollMoves,
       pageDowns,
       manualScrollMoves,
@@ -677,23 +704,17 @@
       passId,
       pageUrl: location.href,
       diagnostics,
-      note: pageDownOnly
-        ? 'PageDown-only mode was enabled: the helper skipped its normal direct-scroll and load-more-button strategy and used only PageDown-style movement inside the Comments scroller while continuing to stream comments into CC.'
-        : 'Comments are streamed into CC as they are discovered. Manual scrolling is noticed by the collector, and periodic PageDown-style moves are mixed with targeted comment-panel scrolling.',
+      note: 'Comments and their visible GIF/image/video attachments are streamed into CC as they are discovered. Manual scrolling in the focused worker tab is still supported.',
     };
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'CC_INSTAGRAM_COLLECT') return false;
-    const rawMaxClicks = Math.max(1, Number(message.maxClicks || 40));
-    const pageDownOnly = rawMaxClicks >= 10000;
-    const maxClicks = pageDownOnly ? Math.max(1, rawMaxClicks - 10000) : rawMaxClicks;
     loadAndCollect(
       message.url || location.href,
       message.sourceId,
-      maxClicks,
+      Math.max(1, Number(message.maxClicks || 40)),
       message.passId || '',
-      pageDownOnly,
     )
       .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
