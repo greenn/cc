@@ -27,13 +27,76 @@ function readState() {
 
 function normalizedUrl(value) {
   try {
-    const url = new URL(String(value || ''));
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
+    const url = new URL(raw);
     url.search = '';
     url.hash = '';
     return url.toString().replace(/\/$/, '');
   } catch {
     return '';
   }
+}
+
+function safeHttpUrl(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    return /^https?:$/i.test(url.protocol) ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function directMediaKind(value) {
+  const safe = safeHttpUrl(value);
+  if (!safe) return '';
+  try {
+    const url = new URL(safe);
+    const path = url.pathname.toLowerCase();
+    if (/\.(?:gif|gifv|webp|jpe?g|png|avif)$/.test(path)) return 'image';
+    if (/\.(?:mp4|webm|mov|m4v)$/.test(path)) return 'video';
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+function sanitizeInstagramAttachment(item, sourceUrl = '') {
+  if (!item || typeof item !== 'object') return null;
+  const type = item.type === 'video' ? 'video' : 'image';
+  const direct = safeHttpUrl(item.url);
+  const preview = safeHttpUrl(item.previewUrl || item.poster || item.thumbnail);
+  const normalizedSource = normalizedUrl(sourceUrl);
+
+  const cleanDirect = direct && normalizedUrl(direct) !== normalizedSource && directMediaKind(direct) ? direct : '';
+  const cleanPreview = preview && normalizedUrl(preview) !== normalizedSource && directMediaKind(preview) === 'image' ? preview : '';
+
+  if (!cleanDirect && !cleanPreview) return null;
+  if (type === 'video' && cleanDirect && directMediaKind(cleanDirect) !== 'video') return null;
+  if (type === 'image' && cleanDirect && directMediaKind(cleanDirect) !== 'image') return null;
+
+  return {
+    ...item,
+    type,
+    url: cleanDirect,
+    previewUrl: cleanPreview,
+  };
+}
+
+function sanitizeInstagramAttachments(items, sourceUrl = '') {
+  const result = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(items) ? items : []) {
+    const item = sanitizeInstagramAttachment(raw, sourceUrl);
+    if (!item) continue;
+    const key = `${item.type}:${normalizedUrl(item.url || item.previewUrl)}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }
 
 function sanitizeLegacyInstagramMedia(input) {
@@ -48,13 +111,17 @@ function sanitizeLegacyInstagramMedia(input) {
         comment.originalUrl = '';
       }
 
-      if (comment?.attachmentScope === 'comment') return true;
-      if (Array.isArray(comment?.attachments) && comment.attachments.length) comment.attachments = [];
+      comment.attachments = sanitizeInstagramAttachments(comment?.attachments, source?.url || '');
+
+      if (comment?.attachmentScope !== 'comment') {
+        comment.attachments = [];
+      }
 
       const hasText = Boolean(String(comment?.text || '').trim());
       const hasTime = Boolean(String(comment?.publishedAt || '').trim());
       const hasNote = Boolean(String(comment?.note || '').trim());
-      return hasText || hasTime || hasNote;
+      const hasAttachment = comment.attachments.length > 0;
+      return hasText || hasTime || hasNote || hasAttachment;
     });
   }
   return input;
@@ -68,7 +135,7 @@ function persist() {
 
 function attachmentKey(item) {
   if (!item || typeof item !== 'object') return '';
-  return `${item.type || 'image'}:${item.url || item.previewUrl || item.poster || item.thumbnail || ''}`;
+  return `${item.type || 'image'}:${normalizedUrl(item.url || item.previewUrl || item.poster || item.thumbnail || '')}`;
 }
 
 function mergeAttachments(previous, incoming) {
@@ -90,6 +157,17 @@ function instagramFallbackKey(comment) {
   const text = String(comment.text || '').trim();
   if (!username || (!publishedAt && !text)) return '';
   return `${username}\n${publishedAt}\n${text}`;
+}
+
+function sanitizeIncomingComment(source, next) {
+  if (source?.platform !== 'instagram') return next;
+  const attachments = sanitizeInstagramAttachments(next?.attachments, source?.url || '');
+  const originalUrl = normalizedUrl(next?.originalUrl) === normalizedUrl(source?.url) ? '' : (next?.originalUrl || '');
+  return {
+    ...next,
+    attachments,
+    originalUrl,
+  };
 }
 
 export const store = {
@@ -162,7 +240,15 @@ export const store = {
       .map((comment) => [instagramFallbackKey(comment), comment])
       .filter(([key]) => Boolean(key)));
 
-    for (const next of incoming) {
+    for (const rawNext of incoming) {
+      const next = sanitizeIncomingComment(source, rawNext);
+      if (source?.platform === 'instagram') {
+        const hasText = Boolean(String(next?.text || '').trim());
+        const hasTime = Boolean(String(next?.publishedAt || '').trim());
+        const hasAttachment = Array.isArray(next?.attachments) && next.attachments.length > 0;
+        if (!hasText && !hasTime && !hasAttachment) continue;
+      }
+
       const fallbackKey = instagramFallbackKey(next);
       const old = byPlatformId.get(next.platformCommentId)
         || (fallbackKey ? byInstagramFallback.get(fallbackKey) : null);
