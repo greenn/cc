@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.24`.
+Current baseline version: `0.5.25`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.24`;
-- another change on the same day: `0.5.25`;
+- current version: `0.5.25`;
+- another change on the same day: `0.5.26`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -113,6 +113,9 @@ These are default product conventions for applications we build:
 - Render collected comment attachments directly under the comment text. Images/GIFs are lazy-loaded and open their actual media URL; video attachments use native controls when a direct HTTP media URL is available. If Instagram exposes only a video poster/preview, show that preview and link back to the original comment only when a true comment permalink exists.
 - The DOM renderer must not expose its internal attachment render-cache signature as a `data-signature` attribute. Keep render signatures in JavaScript memory (for example a `WeakMap`) so inspected comment HTML contains only meaningful attachment markup.
 - When a source is open, expose an `Attachments · N` action in the source header. It opens a gallery containing every verified collected comment attachment for that source, with author, comment snippet, and true original-comment link when available.
+- When the selected comment has attachments, the Details/Info panel shows attachment metadata: direct media link, detected format, and pixel dimensions when the browser can load the media metadata.
+- The Details/Info panel also shows `Related attachments` from other comments by the same normalized author in the same source/post. Each related item links to the media and can jump to the corresponding local CC comment.
+- Attachment dimensions are display metadata resolved lazily in the browser; do not require a Helper re-scrape merely to show width/height.
 - Store attachment URLs/previews with the comment in CC local data. Do not mirror comment attachments to the PHP backend unless that storage policy is explicitly changed later.
 - Instagram CDN attachment URLs may expire; if that becomes a practical problem, add an explicit local/helper caching layer rather than silently duplicating all media by default.
 
