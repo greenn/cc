@@ -1,4 +1,4 @@
-const VERSION = '0.5.18';
+const VERSION = '0.5.19';
 
 const modules = [
   './boot-route.js',
@@ -6,6 +6,7 @@ const modules = [
   './app.js',
   './source-groups.js',
   './source-meta.js',
+  './instagram-scroll-mode.js',
   './instagram-media.js',
   './instagram-stream.js',
   './instagram-progress.js',
