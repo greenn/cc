@@ -115,6 +115,11 @@ window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   const message = event.data;
   if (!message || message.source !== 'cc-helper' || message.type !== 'CC_HELPER_PROGRESS') return;
+
+  // The Refresh handler stops immediate DOM click propagation, so the first
+  // live helper progress event is also our reliable signal that a worker
+  // operation has actually started and the Open worker control can appear.
+  render();
   if (['complete', 'interrupted'].includes(String(message.progress?.phase || ''))) {
     window.setTimeout(render, 400);
     window.setTimeout(render, 1200);
