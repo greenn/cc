@@ -712,6 +712,7 @@
     const scroller = commentScroller();
     const attachmentCount = comments.reduce((sum, comment) => sum + (Array.isArray(comment.attachments) ? comment.attachments.length : 0), 0);
     const diagnostics = {
+      method: 'dom',
       commentCandidates: commentNodes().length,
       permalinkAnchors: document.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').length,
       timestamps: document.querySelectorAll('time').length,
@@ -762,14 +763,51 @@
     };
   }
 
+  async function loadAndCollectNetwork(message) {
+    if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
+    const collector = window.__CC_INSTAGRAM_NETWORK_COLLECT__;
+    if (typeof collector !== 'function') {
+      throw new Error('Instagram Network / GraphQL collector is not loaded. Reload CC Browser Helper in chrome://extensions and try again.');
+    }
+
+    const sourceId = String(message.sourceId || '');
+    const passId = String(message.passId || `${sourceId || 'instagram'}:${Date.now()}`);
+    const maxClicks = Math.max(1, Number(message.maxClicks || 40));
+    const maxPages = Math.max(120, Math.min(600, maxClicks * 3));
+    reportProgress(sourceId, {
+      passId,
+      phase: 'network-wait',
+      collected: 0,
+      streamed: 0,
+      step: 0,
+      maxSteps: maxPages,
+    }, true);
+
+    // Start listening first, then open Comments. That way the MAIN-world
+    // interceptor is already waiting when Instagram fires its first GraphQL
+    // comment request. A recently captured request can also be reused.
+    const pending = collector({
+      sourceId,
+      passId,
+      maxPages,
+      timeoutMs: 420000,
+    });
+    await openReelCommentsIfNeeded(14000);
+    return await pending;
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type !== 'CC_INSTAGRAM_COLLECT') return false;
-    loadAndCollect(
-      message.url || location.href,
-      message.sourceId,
-      Math.max(1, Number(message.maxClicks || 40)),
-      message.passId || '',
-    )
+    const useNetwork = /#cc-network(?:$|[?&])/i.test(String(message.url || ''));
+    const task = useNetwork
+      ? loadAndCollectNetwork(message)
+      : loadAndCollect(
+          message.url || location.href,
+          message.sourceId,
+          Math.max(1, Number(message.maxClicks || 40)),
+          message.passId || '',
+        );
+    task
       .then((result) => sendResponse({ ok: true, result }))
       .catch((error) => sendResponse({ ok: false, error: error?.message || String(error) }));
     return true;
