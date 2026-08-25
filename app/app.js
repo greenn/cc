@@ -100,10 +100,11 @@ function canAutoLoad(source) {
 function getScopeComments() {
   let comments = currentSourceId ? store.getComments(currentSourceId) : store.getComments();
   const filter = globalView && globalView !== 'sources' ? globalView : activeFilter;
+  const isPrimary = (comment) => !comment.deleted && !comment.saved;
 
-  if (filter === 'comments' || filter === 'all') comments = comments.filter((comment) => !comment.deleted);
-  if (filter === 'unread') comments = comments.filter((comment) => !comment.read && !comment.deleted);
-  if (filter === 'read') comments = comments.filter((comment) => comment.read && !comment.deleted);
+  if (filter === 'comments' || filter === 'all') comments = comments.filter(isPrimary);
+  if (filter === 'unread') comments = comments.filter((comment) => !comment.read && isPrimary(comment));
+  if (filter === 'read') comments = comments.filter((comment) => comment.read && isPrimary(comment));
   if (filter === 'saved') comments = comments.filter((comment) => comment.saved && !comment.deleted);
   if (filter === 'deleted') comments = comments.filter((comment) => comment.deleted);
 
