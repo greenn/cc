@@ -167,6 +167,30 @@ async function restoreCallerFocus(caller) {
   }
 }
 
+async function focusInstagramWorker(sourceId, timeoutMs = 8000) {
+  const wantedSourceId = String(sourceId || '');
+  if (!wantedSourceId) throw new Error('Instagram source ID is missing.');
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    for (const [tabId, session] of workerSessions) {
+      if (session?.sourceId !== wantedSourceId || session.closingByHelper) continue;
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        session.manualFocus = true;
+        await chrome.tabs.update(tabId, { active: true });
+        if (tab?.windowId) await chrome.windows.update(tab.windowId, { focused: true });
+        return { focused: true, tabId, sourceId: wantedSourceId };
+      } catch {
+        // The worker may still be registering or may have just finished.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error('Instagram worker tab is not ready or has already finished. Start Refresh / Load more and try Open worker again.');
+}
+
 async function createInstagramWorkerTab(targetUrl, caller) {
   const createProperties = {
     url: targetUrl,
@@ -419,11 +443,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           'instagram-progress',
           'instagram-comment-stream',
           'instagram-manual-worker',
+          'instagram-focus-worker',
         ],
       };
     }
     if (message.action === 'instagram.collect') {
       return await collectInstagram(message.payload || {}, callerFromSender(sender));
+    }
+    if (message.action === 'instagram.focusWorker') {
+      return await focusInstagramWorker(message.payload?.sourceId, 8000);
     }
     if (message.action === 'instagram.downloadMedia') {
       return await downloadInstagramMedia(message.payload || {}, callerFromSender(sender));
