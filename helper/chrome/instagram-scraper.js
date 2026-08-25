@@ -192,8 +192,10 @@
   }
 
   function safeHttpUrl(value) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return '';
     try {
-      const url = new URL(String(value || ''), location.href);
+      const url = new URL(raw, location.href);
       return /^https?:$/i.test(url.protocol) ? url.toString() : '';
     } catch {
       return '';
@@ -266,7 +268,7 @@
     for (const image of node.querySelectorAll('img')) {
       if (authorAnchor?.contains(image) || isProfileMedia(image)) continue;
       const alt = image.getAttribute('alt') || image.getAttribute('aria-label') || '';
-      const url = safeHttpUrl(image.currentSrc || image.src) || srcsetUrl(image.getAttribute('srcset'));
+      const url = safeHttpUrl(image.currentSrc || image.getAttribute('src')) || srcsetUrl(image.getAttribute('srcset'));
       const rect = image.getBoundingClientRect();
       const width = Number(rect.width || image.naturalWidth || 0);
       const height = Number(rect.height || image.naturalHeight || 0);
@@ -292,10 +294,9 @@
     for (const video of node.querySelectorAll('video')) {
       if (authorAnchor?.contains(video) || isProfileMedia(video)) continue;
       const direct = safeHttpUrl(video.currentSrc)
-        || safeHttpUrl(video.src)
-        || safeHttpUrl(video.querySelector('source[src]')?.src)
+        || safeHttpUrl(video.getAttribute('src'))
         || safeHttpUrl(video.querySelector('source[src]')?.getAttribute('src'));
-      const preview = safeHttpUrl(video.poster);
+      const preview = safeHttpUrl(video.getAttribute('poster'));
       add('video', direct, preview, video.getAttribute('aria-label') || video.getAttribute('title') || '');
     }
 
@@ -459,7 +460,7 @@
         text,
         attachments,
         attachmentScope: 'comment',
-        attachmentParserVersion: 2,
+        attachmentParserVersion: 3,
         publishedAt,
         likeCount: stats.likeCount,
         replyCount: stats.replyCount,
@@ -757,7 +758,7 @@
       passId,
       pageUrl: location.href,
       diagnostics,
-      note: 'Attachments are read only from the nearest verified comment DOM container. GIF/image/video URLs are streamed with that comment; the Reel/post itself is not used as a fallback comment attachment or comment permalink.',
+      note: 'Attachments are read only from the nearest verified comment DOM container. Empty media values are never resolved against the Reel URL; GIF/image/video URLs are streamed only when a real media URL exists.',
     };
   }
 
