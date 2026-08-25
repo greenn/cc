@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#fff6cf" />
   <title>CC — Comment Collection</title>
-  <link rel="stylesheet" href="./styles.css?v=0.5.3" />
-  <link rel="stylesheet" href="./ui-state.css?v=0.5.3" />
-  <link rel="stylesheet" href="./transcript.css?v=0.5.3" />
+  <link rel="stylesheet" href="./styles.css?v=0.5.4" />
+  <link rel="stylesheet" href="./ui-state.css?v=0.5.4" />
+  <link rel="stylesheet" href="./transcript.css?v=0.5.4" />
   <script>
     window.__CC_BOOT_STARTED_AT__ = performance.now();
-    console.info('[CC 0.5.3] HTML boot', { href: location.href, readyState: document.readyState });
+    console.info('[CC 0.5.4] HTML boot', { href: location.href, readyState: document.readyState });
   </script>
 </head>
 <body>
@@ -20,7 +20,7 @@
     <header class="app-global-topbar" aria-label="Application navigation">
       <div class="brand">
         <span class="brand-mark">CC</span>
-        <div class="brand-copy"><strong>Comment Collection</strong><span>0.5.3</span></div>
+        <div class="brand-copy"><strong>Comment Collection</strong><span>0.5.4</span></div>
       </div>
       <nav class="left-nav" id="main-nav">
         <button class="nav-item is-active" data-view="sources"><span class="nav-icon">▦</span><span>Sources</span></button>
@@ -225,7 +225,7 @@
   </dialog>
 
   <script type="module">
-    const VERSION = '0.5.3';
+    const VERSION = '0.5.4';
     const errorBox = document.querySelector('#cc-boot-error');
     const localBoot = `./app-boot.js?v=${VERSION}`;
     const fallbackBoot = `https://raw.githubusercontent.com/greenn/cc/main/app/app-boot.js?v=${VERSION}`;
