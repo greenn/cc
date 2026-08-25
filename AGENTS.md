@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.25`.
+Current baseline version: `0.5.26`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.25`;
-- another change on the same day: `0.5.26`;
+- current version: `0.5.26`;
+- another change on the same day: `0.5.27`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -81,6 +81,10 @@ These are default product conventions for applications we build:
 - Mix targeted comment-container scrolling with occasional PageDown-style movement, but do not expose a PageDown-only setting. Synthetic PageDown does not reliably make Instagram advance in an unfocused worker tab; when deeper loading depends on real browser focus, manual use of the temporary worker tab is an accepted workflow.
 - During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments found in the current helper pass, how many have already been streamed and persisted by CC, the current phase, and crawl step.
 - Stream discovered comments to CC immediately in small batches instead of keeping the entire result only inside the worker tab until the end. CC must upsert each incoming batch synchronously into local storage.
+- Once more than 100 unique comments have been streamed in the current Instagram worker pass, begin pruning old comment DOM to keep long Reel sessions responsive. Keep a small live tail of recent comments (currently 24) so Instagram still has nearby structure for scrolling/loading.
+- DOM pruning must happen only after the Helper has had time to collect/stream the comment. Prefer old off-screen comment containers, skip visible comments and containers with still-unexpanded reply controls, and preserve approximate layout height while removing the heavy child subtree so GIF/video/image animation is released.
+- DOM pruning is a performance optimization only. The parsed comment objects remain in the Helper accumulator and already-streamed batches remain stored in CC; pruning the Instagram page must never delete the local CC comment.
+- Expose the number of pruned worker-DOM comment blocks in Helper diagnostics (`DOM −N`) so it is visible when the optimization is active.
 - If the user closes the temporary worker tab early, all batches that were already streamed to CC remain saved. Losing the worker must not roll back already persisted comments; the operation should end with an explicit interrupted/worker-closed message.
 - The final scrape result is still merged once more at normal completion as a safety net. Duplicate platform comment IDs must not create duplicate comments or erase local read/saved/highlight/deleted/note state.
 - Live progress is diagnostic activity, not a promise that every displayed found comment is newly added to local storage. A pass may rediscover comments CC already has; expose the distinction between found/streamed comments and comments that were actually new to the local source.
