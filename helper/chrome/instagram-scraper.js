@@ -1,4 +1,7 @@
 (() => {
+  if (window.__CC_INSTAGRAM_SCRAPER_INSTALLED__) return;
+  window.__CC_INSTAGRAM_SCRAPER_INSTALLED__ = true;
+
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   function simpleHash(value) {
@@ -11,52 +14,55 @@
   }
 
   function isLoggedOut() {
-    return location.pathname.includes('/accounts/login') || Boolean(document.querySelector('input[name="username"], input[name="password"]'));
+    return location.pathname.includes('/accounts/login')
+      || Boolean(document.querySelector('input[name="username"], input[name="password"]'));
   }
 
   function isReelPage() {
     return /^\/reels?\//i.test(location.pathname);
   }
 
-  function commentsPanelOpen() {
-    const dialogs = [...document.querySelectorAll('[role="dialog"]')];
-    for (const dialog of dialogs) {
-      const headingText = [...dialog.querySelectorAll('h1, h2, h3, [role="heading"]')]
+  function isVisible(node) {
+    if (!(node instanceof Element)) return false;
+    const rect = node.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const style = getComputedStyle(node);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  }
+
+  function commentsDialog() {
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')].filter(isVisible);
+    return dialogs.find((dialog) => {
+      const heading = [...dialog.querySelectorAll('h1, h2, h3, [role="heading"]')]
         .map((node) => (node.textContent || '').trim())
         .join(' ');
-      if (/comments?|комментар/i.test(headingText)) return true;
+      if (/comments?|комментар/i.test(heading)) return true;
+      return [...dialog.querySelectorAll('textarea, input[placeholder]')].some((field) =>
+        /comment|комментар/i.test(field.getAttribute('placeholder') || '')
+      );
+    }) || null;
+  }
 
-      const field = dialog.querySelector('textarea, input[placeholder]');
-      const placeholder = field?.getAttribute('placeholder') || '';
-      if (/comment|комментар/i.test(placeholder)) return true;
-    }
-
-    return [...document.querySelectorAll('textarea, input[placeholder]')].some((field) => {
-      const placeholder = field.getAttribute('placeholder') || '';
-      if (!/comment|комментар/i.test(placeholder)) return false;
-      const rect = field.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    });
+  function commentsPanelOpen() {
+    if (commentsDialog()) return true;
+    return [...document.querySelectorAll('textarea, input[placeholder]')].some((field) =>
+      isVisible(field) && /comment|комментар/i.test(field.getAttribute('placeholder') || '')
+    );
   }
 
   function visibleClickable(node) {
     const clickable = node?.closest?.('button, [role="button"], a[href]');
-    if (!clickable) return null;
-    const rect = clickable.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return null;
-    const style = getComputedStyle(clickable);
-    if (style.visibility === 'hidden' || style.display === 'none') return null;
-    return clickable;
+    return clickable && isVisible(clickable) ? clickable : null;
   }
 
   function commentActionButton() {
-    const candidates = [];
+    const found = [];
     const seen = new Set();
     const push = (node) => {
       const clickable = visibleClickable(node);
       if (!clickable || seen.has(clickable)) return;
       seen.add(clickable);
-      candidates.push(clickable);
+      found.push(clickable);
     };
 
     document.querySelectorAll('[aria-label], [title]').forEach((node) => {
@@ -70,47 +76,31 @@
       if (/^(?:view )?comments?$|^comment$|комментари|комментировать/i.test(label)) push(node);
     });
 
-    document.querySelectorAll('a[href]').forEach((anchor) => {
-      const href = anchor.getAttribute('href') || '';
-      if (/\/comments?\/?(?:[?#]|$)/i.test(href)) push(anchor);
-    });
-
-    return candidates[0] || null;
+    return found[0] || null;
   }
 
-  async function openReelCommentsIfNeeded(timeoutMs = 7000) {
-    if (!isReelPage()) {
-      return { reelPage: false, clickAttempted: false, opened: commentsPanelOpen() };
-    }
-
-    if (commentsPanelOpen()) {
-      return { reelPage: true, clickAttempted: false, opened: true };
-    }
+  async function openReelCommentsIfNeeded(timeoutMs = 12000) {
+    if (!isReelPage()) return { reelPage: false, clickAttempted: false, opened: commentsPanelOpen() };
+    if (commentsPanelOpen()) return { reelPage: true, clickAttempted: false, opened: true };
 
     const deadline = Date.now() + timeoutMs;
     let clickAttempted = false;
-
     while (Date.now() < deadline) {
       if (commentsPanelOpen()) return { reelPage: true, clickAttempted, opened: true };
-
       const action = commentActionButton();
       if (action) {
         clickAttempted = true;
         try {
           action.scrollIntoView({ block: 'center', inline: 'nearest' });
-          await sleep(120);
+          await sleep(150);
           action.click();
-          await sleep(900);
-          if (commentsPanelOpen()) return { reelPage: true, clickAttempted, opened: true };
+          await sleep(1100);
         } catch {
-          // Instagram can replace the action element while the Reel UI settles.
-          // Keep looking until the timeout rather than failing immediately.
+          // Instagram can replace the action while the Reel UI settles.
         }
       }
-
-      await sleep(350);
+      await sleep(400);
     }
-
     return { reelPage: true, clickAttempted, opened: commentsPanelOpen() };
   }
 
@@ -125,38 +115,31 @@
   }
 
   function usernameFromAnchor(anchor) {
-    if (!anchor) return '';
-    return (anchor.getAttribute('href') || '').split('?')[0].split('/').filter(Boolean)[0]
-      || (anchor.textContent || '').trim();
+    return (anchor?.getAttribute('href') || '').split('?')[0].split('/').filter(Boolean)[0]
+      || (anchor?.textContent || '').trim();
   }
 
   function isUiText(text, username = '') {
     const value = String(text || '').trim();
     if (!value || value === username || value === `@${username}`) return true;
-    return /^(reply|replies|like|likes|see translation|edited|more|view replies|view \d+ replies|view all \d+ replies|load more comments|view more comments|view all \d+ comments|\d+[smhdw]|\d+\s*(seconds?|minutes?|hours?|days?|weeks?)\s*ago|ответить|ответы|нравится|отметок? «?нравится»?|показать перевод|изменено|ещ[её]|посмотреть ответы|показать ответы|показать все ответы|показать ещё комментарии|загрузить еще комментарии|посмотреть все комментарии)$/i.test(value);
+    return /^(reply|replies|like|likes|see translation|edited|more|view replies|view \d+ replies|view all \d+ replies|load more comments|view more comments|view all \d+ comments|\d+[smhdw]|\d+\s*(seconds?|minutes?|hours?|days?|weeks?)\s*ago|ответить|ответы|нравится|показать перевод|изменено|посмотреть ответы|показать ответы|показать все ответы|показать ещё комментарии|загрузить еще комментарии|посмотреть все комментарии)$/i.test(value);
   }
 
   function cleanCandidateText(node, username) {
-    const leafSpans = [...node.querySelectorAll('span')]
+    const leaf = [...node.querySelectorAll('span')]
       .filter((span) => !span.querySelector('span'))
       .map((span) => (span.innerText || span.textContent || '').trim())
-      .filter((text) => text.length > 1 && !isUiText(text, username));
+      .filter((text) => text.length > 1 && !isUiText(text, username))
+      .filter((text) => !/^[\d.,\s]+[kKmMкКмМ]?\s*(likes?|отмет)/i.test(text))
+      .filter((text) => !/^(view|show|посмотреть|показать)\s+\d+/i.test(text));
+    const unique = [...new Set(leaf)];
+    if (unique.length) return unique.sort((a, b) => b.length - a.length)[0];
 
-    const uniqueLeaf = [...new Set(leafSpans)];
-    const usefulLeaf = uniqueLeaf.filter((text) => {
-      if (/^[\d.,\s]+[kKmMкКмМ]?\s*(likes?|отмет)/i.test(text)) return false;
-      if (/^(view|show|посмотреть|показать)\s+\d+/i.test(text)) return false;
-      return true;
-    });
-    if (usefulLeaf.length) return usefulLeaf.sort((a, b) => b.length - a.length)[0];
-
-    const lines = (node.innerText || '')
-      .split('\n')
+    const lines = (node.innerText || '').split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 1 && !isUiText(line, username))
       .filter((line) => !/^[\d.,\s]+[kKmMкКмМ]?\s*(likes?|отмет)/i.test(line))
       .filter((line) => !/^(view|show|посмотреть|показать)\s+\d+/i.test(line));
-
     return [...new Set(lines)].sort((a, b) => b.length - a.length)[0] || '';
   }
 
@@ -172,42 +155,32 @@
 
   function extractStats(node) {
     const text = node.innerText || '';
-    const likesMatch = text.match(/([\d.,\s]+\s*[kKmMкКмМ]?)\s+(?:likes?|отмет(?:ка|ки|ок)\s+«?нравится»?)/i);
-    const repliesMatch = text.match(/(?:view|show|посмотреть|показать)\s+([\d.,\s]+)\s+(?:repl(?:y|ies)|ответ)/i);
+    const likes = text.match(/([\d.,\s]+\s*[kKmMкКмМ]?)\s+(?:likes?|отмет(?:ка|ки|ок)\s+«?нравится»?)/i);
+    const replies = text.match(/(?:view|show|посмотреть|показать)\s+([\d.,\s]+)\s+(?:repl(?:y|ies)|ответ)/i);
     return {
-      likeCount: likesMatch ? parseNumber(likesMatch[1]) : 0,
-      replyCount: repliesMatch ? parseNumber(repliesMatch[1]) : 0,
+      likeCount: likes ? parseNumber(likes[1]) : 0,
+      replyCount: replies ? parseNumber(replies[1]) : 0,
     };
   }
 
   function commentPermalink(node) {
-    return [...node.querySelectorAll('a[href]')].find((anchor) => {
-      const href = anchor.getAttribute('href') || '';
-      return /\/c\/|[?&]comment_id=/i.test(href);
-    }) || null;
+    return [...node.querySelectorAll('a[href]')].find((anchor) =>
+      /\/c\/|[?&]comment_id=/i.test(anchor.getAttribute('href') || '')
+    ) || null;
   }
 
   function candidateScore(node) {
     if (!node) return Infinity;
-    const authorLink = profileAnchor(node);
-    if (!authorLink) return Infinity;
-    const username = usernameFromAnchor(authorLink);
+    const author = profileAnchor(node);
+    const username = usernameFromAnchor(author);
     if (!username) return Infinity;
-
-    const textLength = (node.innerText || '').trim().length;
-    if (textLength < 2 || textLength > 2500) return Infinity;
-
-    const hasTime = Boolean(node.querySelector('time'));
-    const hasPermalink = Boolean(commentPermalink(node));
-    if (!hasTime && !hasPermalink) return Infinity;
-
-    const text = cleanCandidateText(node, username);
-    if (!text || text.length < 2) return Infinity;
-
+    const raw = (node.innerText || '').trim();
+    if (raw.length < 2 || raw.length > 3000) return Infinity;
+    if (!node.querySelector('time') && !commentPermalink(node)) return Infinity;
+    if (!cleanCandidateText(node, username)) return Infinity;
     const profiles = node.querySelectorAll('a[href^="/"]').length;
-    if (profiles > 8) return Infinity;
-
-    return textLength + profiles * 350 - (hasPermalink ? 180 : 0);
+    if (profiles > 10) return Infinity;
+    return raw.length + profiles * 320 - (commentPermalink(node) ? 180 : 0);
   }
 
   function nearestCommentContainer(seed, root) {
@@ -226,28 +199,17 @@
     return best;
   }
 
-  function expandForCommentText(node, username) {
-    let current = node;
-    for (let depth = 0; current && depth < 6; depth += 1, current = current.parentElement) {
-      const rawLength = (current.innerText || '').trim().length;
-      if (rawLength > 3500) break;
-      const profiles = current.querySelectorAll('a[href^="/"]').length;
-      if (profiles > 10) break;
-      const text = cleanCandidateText(current, username);
-      if (text && text.length >= 2) return { node: current, text };
-    }
-    return { node, text: '' };
-  }
-
-  function commentNodes() {
-    const roots = [
-      document.querySelector('[role="dialog"]'),
+  function commentRoots() {
+    const dialog = commentsDialog();
+    if (dialog) return [dialog];
+    return [
       document.querySelector('main article'),
       document.querySelector('article'),
       document.querySelector('main'),
-      document.body,
     ].filter(Boolean);
+  }
 
+  function commentNodes() {
     const seen = new Set();
     const nodes = [];
     const push = (node) => {
@@ -256,53 +218,39 @@
       nodes.push(node);
     };
 
-    for (const root of roots) {
+    for (const root of commentRoots()) {
       root.querySelectorAll('ul li').forEach(push);
-
-      root.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').forEach((anchor) => {
-        push(nearestCommentContainer(anchor, root));
-      });
-      root.querySelectorAll('time').forEach((time) => {
-        push(nearestCommentContainer(time, root));
-      });
+      root.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').forEach((anchor) => push(nearestCommentContainer(anchor, root)));
+      root.querySelectorAll('time').forEach((time) => push(nearestCommentContainer(time, root)));
     }
-
     return nodes;
   }
 
   function collect(url, sourceId) {
     const output = [];
     const seen = new Set();
-
-    for (const initialNode of commentNodes()) {
-      const authorLink = profileAnchor(initialNode);
-      if (!authorLink) continue;
-      const username = usernameFromAnchor(authorLink);
+    for (const node of commentNodes()) {
+      const author = profileAnchor(node);
+      const username = usernameFromAnchor(author);
       if (!username) continue;
-
-      const expanded = expandForCommentText(initialNode, username);
-      const node = expanded.node;
-      const text = expanded.text;
+      const text = cleanCandidateText(node, username);
       if (!text || text.length < 2) continue;
-
-      const time = node.querySelector('time') || initialNode.querySelector('time');
+      const time = node.querySelector('time');
       const publishedAt = time?.getAttribute('datetime') || null;
-      const permalink = commentPermalink(node) || commentPermalink(initialNode);
+      const permalink = commentPermalink(node);
       let originalUrl = url;
       let explicitId = '';
       if (permalink) {
         try {
           originalUrl = new URL(permalink.getAttribute('href'), location.origin).toString();
           explicitId = originalUrl;
-        } catch { /* use source URL */ }
+        } catch { /* keep source URL */ }
       }
-
       const platformCommentId = explicitId || simpleHash(`${username}\n${publishedAt || ''}\n${text}`);
       if (seen.has(platformCommentId)) continue;
       seen.add(platformCommentId);
       const stats = extractStats(node);
       const avatar = node.querySelector('img[src]');
-
       output.push({
         id: `instagram:${platformCommentId}`,
         sourceId,
@@ -318,8 +266,17 @@
         originalUrl,
       });
     }
-
     return output;
+  }
+
+  function mergeComments(target, comments) {
+    for (const comment of comments) target.set(comment.id, comment);
+    return target.size;
+  }
+
+  function buttonText(button) {
+    return [button.innerText, button.getAttribute('aria-label'), button.querySelector('[aria-label]')?.getAttribute('aria-label')]
+      .filter(Boolean).join(' ').trim();
   }
 
   function moreButtons() {
@@ -335,75 +292,98 @@
       /посмотреть (?:все )?.*ответ/i,
       /показать (?:все )?.*ответ/i,
     ];
-
-    const candidates = new Set(document.querySelectorAll('button, [role="button"]'));
-    document.querySelectorAll('[aria-label]').forEach((node) => {
-      const clickable = node.closest('button, [role="button"]');
-      if (clickable) candidates.add(clickable);
-    });
-
-    return [...candidates].filter((button) => {
-      const text = [
-        button.innerText,
-        button.getAttribute('aria-label'),
-        button.querySelector('[aria-label]')?.getAttribute('aria-label'),
-      ].filter(Boolean).join(' ').trim();
-      if (!text || !patterns.some((pattern) => pattern.test(text))) return false;
-      const rect = button.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    });
+    const root = commentsDialog() || document;
+    return [...new Set(root.querySelectorAll('button, [role="button"]'))]
+      .filter((button) => isVisible(button) && patterns.some((pattern) => pattern.test(buttonText(button))))
+      .sort((a, b) => {
+        const aReplies = /repl|ответ/i.test(buttonText(a)) ? 1 : 0;
+        const bReplies = /repl|ответ/i.test(buttonText(b)) ? 1 : 0;
+        return aReplies - bReplies;
+      });
   }
 
-  async function waitForInitialComments(url, sourceId, timeoutMs = 10000) {
+  function commentScroller() {
+    const root = commentsDialog();
+    if (!root) return null;
+    const candidates = [root, ...root.querySelectorAll('div, ul')]
+      .filter((node) => {
+        if (!isVisible(node)) return false;
+        const style = getComputedStyle(node);
+        return /(auto|scroll)/.test(style.overflowY || '') && node.scrollHeight > node.clientHeight + 60;
+      })
+      .sort((a, b) => (b.scrollHeight - b.clientHeight) - (a.scrollHeight - a.clientHeight));
+    return candidates[0] || null;
+  }
+
+  async function waitForInitialComments(url, sourceId, accumulator, timeoutMs = 18000) {
     const deadline = Date.now() + timeoutMs;
-    let best = [];
     while (Date.now() < deadline) {
       if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
-      const current = collect(url, sourceId);
-      if (current.length > best.length) best = current;
-      if (current.length > 0 || moreButtons().length > 0) return best;
+      mergeComments(accumulator, collect(url, sourceId));
+      if (accumulator.size > 0 || moreButtons().length > 0) return;
+      if (isReelPage() && !commentsPanelOpen()) await openReelCommentsIfNeeded(2500);
       await sleep(500);
     }
-    return best;
   }
 
   async function loadAndCollect(url, sourceId, maxClicks) {
     if (isLoggedOut()) throw new Error('Instagram is not logged in in this Chrome profile. Log in to Instagram and try again.');
 
     const reelPanel = await openReelCommentsIfNeeded();
-    await waitForInitialComments(url, sourceId);
+    const accumulator = new Map();
+    await waitForInitialComments(url, sourceId, accumulator);
 
-    let previousCount = -1;
-    let stableRounds = 0;
     let clicks = 0;
+    let scrollMoves = 0;
+    let stableRounds = 0;
+    let previousSize = accumulator.size;
+    const maxSteps = Math.max(45, Math.min(140, maxClicks * 3));
 
-    while (clicks < maxClicks && stableRounds < 4) {
-      const current = collect(url, sourceId);
-      if (current.length === previousCount) stableRounds += 1;
-      else stableRounds = 0;
-      previousCount = current.length;
+    for (let step = 0; step < maxSteps && stableRounds < 7; step += 1) {
+      if (isLoggedOut()) break;
+      if (isReelPage() && !commentsPanelOpen()) await openReelCommentsIfNeeded(3500);
+
+      mergeComments(accumulator, collect(url, sourceId));
+      let progressed = accumulator.size > previousSize;
+      previousSize = accumulator.size;
 
       const buttons = moreButtons();
-      if (!buttons.length) {
-        await sleep(650);
-        if (!moreButtons().length) break;
-        continue;
+      if (buttons.length && clicks < maxClicks) {
+        try {
+          buttons[0].scrollIntoView({ block: 'center', inline: 'nearest' });
+          await sleep(120);
+          buttons[0].click();
+          clicks += 1;
+          progressed = true;
+          await sleep(850);
+          mergeComments(accumulator, collect(url, sourceId));
+        } catch { /* try scrolling instead */ }
+      } else {
+        const scroller = commentScroller();
+        if (scroller) {
+          const before = scroller.scrollTop;
+          const beforeHeight = scroller.scrollHeight;
+          scroller.scrollTop = Math.min(scroller.scrollHeight, before + Math.max(320, scroller.clientHeight * 0.82));
+          await sleep(850);
+          const moved = Math.abs(scroller.scrollTop - before) > 2 || scroller.scrollHeight > beforeHeight;
+          if (moved) {
+            scrollMoves += 1;
+            progressed = true;
+          }
+          mergeComments(accumulator, collect(url, sourceId));
+        } else {
+          await sleep(650);
+        }
       }
 
-      const button = buttons[0];
-      try {
-        button.scrollIntoView({ block: 'center' });
-        await sleep(120);
-        button.click();
-        clicks += 1;
-        await sleep(1000);
-      } catch {
-        break;
-      }
+      if (accumulator.size > previousSize) progressed = true;
+      previousSize = accumulator.size;
+      stableRounds = progressed ? 0 : stableRounds + 1;
     }
 
-    await sleep(500);
-    const comments = collect(url, sourceId);
+    mergeComments(accumulator, collect(url, sourceId));
+    const comments = [...accumulator.values()];
+    const scroller = commentScroller();
     const diagnostics = {
       commentCandidates: commentNodes().length,
       permalinkAnchors: document.querySelectorAll('a[href*="/c/"], a[href*="comment_id="]').length,
@@ -414,6 +394,10 @@
       reelPage: reelPanel.reelPage,
       commentsPanelClickAttempted: reelPanel.clickAttempted,
       commentsPanelOpen: commentsPanelOpen(),
+      scrollMoves,
+      scrollTop: scroller ? Math.round(scroller.scrollTop) : null,
+      scrollHeight: scroller ? scroller.scrollHeight : null,
+      clientHeight: scroller ? scroller.clientHeight : null,
     };
 
     return {
@@ -421,7 +405,7 @@
       clicks,
       pageUrl: location.href,
       diagnostics,
-      note: 'Instagram DOM is a private implementation detail and may require selector updates after Instagram UI changes.',
+      note: 'Instagram DOM is private and can change; CC accumulates comments while expanding and scrolling the comment panel.',
     };
   }
 
