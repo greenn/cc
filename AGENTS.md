@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.21`.
+Current baseline version: `0.5.22`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.21`;
-- another change on the same day: `0.5.22`;
+- current version: `0.5.22`;
+- another change on the same day: `0.5.23`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -95,11 +95,18 @@ These are default product conventions for applications we build:
 ## Comment media
 
 - A collected comment may contain an `attachments` array with image/GIF/sticker or video items in addition to text.
-- Instagram attachment detection should inspect normal images, `srcset`/`picture` media, CSS/`role=img` backgrounds, video/source elements, and direct media links found inside the nearest valid comment container.
+- Instagram attachment detection must parse the DOM of the nearest verified comment container itself. Do not climb to the Reel/post container merely because a media-only comment has no `<time>` or comment permalink.
+- Media-only comments are valid even when Instagram provides no timestamp/permalink. A nearby author profile plus comment engagement UI such as `Reply`, likes, or `View all N replies` is enough structural evidence to identify the comment container.
+- Instagram attachment detection should inspect normal images, `srcset`/`picture` media, CSS/`role=img` backgrounds, video/source elements, and direct media links found inside that verified comment container.
 - Exclude the comment author's avatar from attachment detection. Prefer media that belongs to the comment container itself; do not treat the Reel/post media or unrelated Instagram UI assets as comment attachments.
+- Direct media URLs such as Instagram/Facebook CDN `.gif`, `.webp`, `.jpg`, `.png`, `.mp4`, etc. count as attachments even when the media element has no `alt` text and dimensions are not yet available.
+- Normalize attachment identity using the media URL origin + pathname, without temporary query parameters, so expiring CDN signatures do not create a new comment ID on every refresh.
+- If Instagram does not expose a true permalink for a comment, leave `originalUrl` empty. Never substitute the Reel/post URL and label it as the original comment.
+- New verified Instagram comments mark their attachment set with `attachmentScope: 'comment'`. CC only renders/counts Instagram attachments carrying this verified scope, so older false Reel/post attachments disappear from the inline list and `Attachments` gallery until the actual comment is refreshed.
+- For a verified Instagram comment, the incoming attachment set is authoritative and replaces older stored attachments for that comment. This allows a corrected refresh to remove previously misclassified Reel/post media.
 - A comment with no meaningful text is still valid when it contains a detected attachment.
-- Render collected comment attachments directly under the comment text. Images/GIFs are lazy-loaded and open their original URL in a new tab; video attachments use native controls when a direct HTTP media URL is available. If Instagram exposes only a video poster/preview, show that preview and link back to the original comment.
-- When a source is open, expose an `Attachments · N` action in the source header. It opens a gallery containing every collected comment attachment for that source, with author, comment snippet, and original-comment link.
+- Render collected comment attachments directly under the comment text. Images/GIFs are lazy-loaded and open their actual media URL; video attachments use native controls when a direct HTTP media URL is available. If Instagram exposes only a video poster/preview, show that preview and link back to the original comment only when a true comment permalink exists.
+- When a source is open, expose an `Attachments · N` action in the source header. It opens a gallery containing every verified collected comment attachment for that source, with author, comment snippet, and true original-comment link when available.
 - Store attachment URLs/previews with the comment in CC local data. Do not mirror comment attachments to the PHP backend unless that storage policy is explicitly changed later.
 - Instagram CDN attachment URLs may expire; if that becomes a practical problem, add an explicit local/helper caching layer rather than silently duplicating all media by default.
 
