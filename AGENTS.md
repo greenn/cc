@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.17`.
+Current baseline version: `0.5.18`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.17`;
-- another change on the same day: `0.5.18`;
+- current version: `0.5.18`;
+- another change on the same day: `0.5.19`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -70,12 +70,18 @@ These are default product conventions for applications we build:
 - The helper should perform that scrape in a dedicated inactive/background temporary tab and must not steal focus from CC.
 - Do not navigate or reuse the user's existing Instagram tabs for a scrape.
 - A helper-created temporary Instagram tab should be closed after the scrape completes.
+- If the user manually activates the helper-created Instagram worker tab, allow that manual interaction. Do not yank focus back to CC while the user is helping the worker by scrolling.
+- Manual user scrolling in the worker tab is valid input: the collector keeps rescanning the currently rendered comment DOM and incorporates comments revealed by the user's movement.
 - Automatic/no-op Instagram loads must keep the source refreshable rather than permanently converting a new source into a finished `0/0` state.
 - A zero-comment scrape is not proof that the Instagram source was deleted. Keep the source and leave Refresh available; do not offer destructive deletion based only on missing rendered comment markup.
 - For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
 - Reel comment collection should open the Comments panel if necessary, then accumulate parsed comments while clicking load/reply controls and scrolling the comments panel. Do not return only the final currently-rendered DOM viewport because Instagram can virtualize the list.
-- During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments accumulated in the current helper pass plus the current phase (opening comments, collecting, expanding, scrolling, waiting, finishing) and crawl step. The current source header and the left source processing badge should update without waiting for the scrape to finish.
-- Live progress is diagnostic activity, not a promise that every displayed count is newly added to local storage. A deep pass may rediscover comments CC already has; the final merge still determines how many comments are actually new.
+- Mix targeted comment-container scrolling with periodic PageDown-style movement. A synthetic PageDown event may be sent for page handlers, but always pair it with an explicit page-sized scroll of the comments container because synthetic keyboard events do not reliably trigger browser-native scrolling.
+- During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments found in the current helper pass, how many have already been streamed and persisted by CC, the current phase, and crawl step.
+- Stream discovered comments to CC immediately in small batches instead of keeping the entire result only inside the worker tab until the end. CC must upsert each incoming batch synchronously into local storage.
+- If the user closes the temporary worker tab early, all batches that were already streamed to CC remain saved. Losing the worker must not roll back already persisted comments; the operation should end with an explicit interrupted/worker-closed message.
+- The final scrape result is still merged once more at normal completion as a safety net. Duplicate platform comment IDs must not create duplicate comments or erase local read/saved/highlight/deleted/note state.
+- Live progress is diagnostic activity, not a promise that every displayed found comment is newly added to local storage. A pass may rediscover comments CC already has; expose the distinction between found/streamed comments and comments that were actually new to the local source.
 - After at least one Instagram comment batch has been loaded, expose a `Load more` action beside Refresh. Each successive deep-load pass uses a larger crawl budget, reopens the temporary worker page, searches farther down the comment panel, and merges only newly discovered comments into the existing local source without deleting previous results.
 - `Refresh` is for the newest/current Instagram state; `Load more` is for progressively deeper older comments. Running either operation for a source must not stop when the user navigates to another CC source.
 - Instagram media downloads are explicit user actions only. Save requested video/photos to the local Chrome Downloads folder under `CC/Instagram/...`; do not mirror media to the PHP backend by default.
@@ -84,6 +90,15 @@ These are default product conventions for applications we build:
 - Reel media counts represent logical media in that Reel, not every media/resource request made by the Instagram page. A normal single-video Reel should report one video and zero photos; never count CDN/resource-timing requests as separate Reel videos.
 - Instagram operations are tracked per source, not globally. Different Instagram sources may run Refresh/media operations concurrently, with one independent temporary Browser Helper worker tab per request. Prevent duplicate execution of the same operation on the same source while it is already running.
 - While an Instagram Refresh/Load more/Video/Photos operation is active, show only a compact animated 3px diagonal black/white bar along the bottom of the initiating action and the corresponding source item in the left list. Navigating to another source must not stop the background operation or lose its processing marker.
+
+## Comment media
+
+- A collected comment may contain an `attachments` array with image/GIF/sticker or video items in addition to text.
+- Exclude the comment author's avatar from attachment detection. Prefer visible media that belongs to the comment container itself; do not treat the Reel/post media or unrelated Instagram UI assets as comment attachments.
+- A comment with no meaningful text is still valid when it contains a detected attachment.
+- Render collected comment attachments directly under the comment text. Images/GIFs are lazy-loaded and open their original URL in a new tab; video attachments use native controls.
+- Store attachment URLs with the comment in CC local data. Do not mirror comment attachments to the PHP backend unless that storage policy is explicitly changed later.
+- Instagram CDN attachment URLs may expire; if that becomes a practical problem, add an explicit local/helper caching layer rather than silently duplicating all media by default.
 
 ## Comment author accounts
 
