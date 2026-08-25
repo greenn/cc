@@ -1,4 +1,4 @@
-const VERSION = '0.5.11';
+const VERSION = '0.5.12';
 
 const modules = [
   './boot-route.js',
