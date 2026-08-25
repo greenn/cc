@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.3`.
+Current baseline version: `0.5.4`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.3`;
-- another change on the same day: `0.5.4`;
+- current version: `0.5.4`;
+- another change on the same day: `0.5.5`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -58,6 +58,7 @@ These are default product conventions for applications we build:
 - When a source is open, show its original URL next to the platform/author metadata as a clickable link. Long source URLs should remain one line and be horizontally scrollable without a visible scrollbar.
 - The primary navigation block `Sources / Archive / All comments / Saved / Read / Deleted` lives in one horizontal yellow top bar at the same level as the application brand.
 - The left yellow column remains below that top bar and contains Add link, the source list, Help, and Settings; it must not reserve empty space for the moved primary navigation.
+- The left source list has no extra `Sources` section heading. Platform groups such as YouTube and Instagram can be collapsed/expanded, and that state is remembered locally in the browser.
 - The main workspace and Details panel begin below the global yellow top bar.
 - Up to 2200px viewport width the application fills the full browser viewport with no blue outer gutter. Blue outer background/gutters are allowed only above 2200px.
 
