@@ -34,6 +34,10 @@ function phaseLabel(phase) {
     'page-down': 'PageDown',
     'waiting-more': 'waiting for more',
     'waiting-panel': 'waiting for panel',
+    'network-wait': 'waiting for GraphQL',
+    'network-captured': 'GraphQL captured',
+    'network-page': 'GraphQL page',
+    'network-complete': 'GraphQL complete',
     interrupted: 'worker closed',
     complete: 'finishing',
   };
@@ -224,4 +228,4 @@ window.addEventListener('popstate', () => requestAnimationFrame(render));
 
 ensureChip();
 render();
-console.info('[CC Instagram progress] live found/saved/DOM-pruned counters ready');
+console.info('[CC Instagram progress] live DOM/GraphQL found/saved/DOM-pruned counters ready');
