@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.8`.
+Current baseline version: `0.5.9`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.8`;
-- another change on the same day: `0.5.9`;
+- current version: `0.5.9`;
+- another change on the same day: `0.5.10`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -75,6 +75,15 @@ These are default product conventions for applications we build:
 - Instagram media downloads are explicit user actions only. Save requested video/photos to the local Chrome Downloads folder under `CC/Instagram/...`; do not mirror media to the PHP backend by default.
 - Keep downloaded-media metadata in the CC source so the app can show downloaded items above Comments and reopen them through the Browser Helper.
 
+## Saved/highlighted comment flow
+
+- Saving a comment marks it as Saved and removes it from the normal working feeds.
+- Highlighting a comment implies Saved, so highlighted comments are also removed from the normal working feeds.
+- Normal working feeds are `Comments`, global `All comments`, `Unread`, and `Read`; they show only non-deleted comments that are not Saved.
+- Saved comments remain available through the per-source `Saved` filter and the global `Saved` view.
+- Deleted comments remain available through `Deleted` and are excluded from Saved views while deleted.
+- If Save/Highlight/Delete removes the current card from the rendered feed, preserve its list-position anchor so keyboard navigation continues from that position instead of jumping back to the top.
+
 ## Comment gestures
 
 - Horizontal gesture on a comment: drag/swipe right to Save, left to Delete.
@@ -92,8 +101,8 @@ These are default product conventions for applications we build:
 - Save/Delete target the selected comment first; if no comment is selected, target the top visible comment in the comments viewport.
 - Up/Down navigation starts from the selected comment; if nothing is selected yet, the first Up/Down selects the top visible comment.
 - Navigating with Up/Down scrolls the selected comment into view.
-- Preserve the current comment index across Delete. If comment N is deleted and disappears from the rendered list, Down continues with the item that moved into position N, while Up goes to position N-1 instead of restarting from the top.
-- Preserve that delete-position anchor for both keyboard Delete and a manual click on the comment's Delete action.
+- Preserve the current comment index across Delete/Save/Highlight when the action removes that card from the current rendered feed. Down continues with the item that moved into the same position, while Up goes to the previous position instead of restarting from the top.
+- Preserve that position anchor for keyboard actions and manual clicks on the relevant comment actions.
 - Do not hijack arrow keys while the user is typing/editing in an input, textarea, select, contenteditable element, or an open dialog.
 - Save via shortcut must not unsave an already-saved comment.
 
