@@ -4,6 +4,7 @@ const commentsList = document.querySelector('#comments-list');
 const sourcesList = document.querySelector('#sources-list');
 const headerActions = document.querySelector('.header-actions');
 const refreshButton = document.querySelector('#refresh-button');
+const renderedSignatureByCard = new WeakMap();
 
 function currentSource() {
   const activeId = document.querySelector('.source-item.is-active[data-source-id]')?.dataset.sourceId;
@@ -97,19 +98,41 @@ function ensureStyle() {
 }
 
 function safeHttpUrl(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
   try {
-    const url = new URL(String(value || ''));
+    const url = new URL(raw);
     return /^https?:$/i.test(url.protocol) ? url.toString() : '';
   } catch {
     return '';
   }
 }
 
-function safeAttachment(value) {
+function mediaKind(value) {
+  const safe = safeHttpUrl(value);
+  if (!safe) return '';
+  try {
+    const path = new URL(safe).pathname.toLowerCase();
+    if (/\.(?:gif|gifv|webp|jpe?g|png|avif)$/.test(path)) return 'image';
+    if (/\.(?:mp4|webm|mov|m4v)$/.test(path)) return 'video';
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+function safeAttachment(comment, value) {
   if (!value || typeof value !== 'object') return null;
+  const source = comment?.sourceId ? store.getSource(comment.sourceId) : null;
   const type = value.type === 'video' ? 'video' : 'image';
-  const url = safeHttpUrl(value.url);
-  const previewUrl = safeHttpUrl(value.previewUrl || value.poster || value.thumbnail);
+  let url = safeHttpUrl(value.url);
+  let previewUrl = safeHttpUrl(value.previewUrl || value.poster || value.thumbnail);
+
+  if (source?.platform === 'instagram') {
+    if (url && mediaKind(url) !== type) url = '';
+    if (previewUrl && mediaKind(previewUrl) !== 'image') previewUrl = '';
+  }
+
   if (!url && !previewUrl) return null;
   return { type, url, previewUrl, alt: String(value.alt || '').trim() };
 }
@@ -121,7 +144,7 @@ function attachmentsFor(comment) {
   const seen = new Set();
   const result = [];
   for (const raw of Array.isArray(comment?.attachments) ? comment.attachments : []) {
-    const item = safeAttachment(raw);
+    const item = safeAttachment(comment, raw);
     if (!item) continue;
     const key = `${item.type}:${item.url || item.previewUrl}`;
     if (seen.has(key)) continue;
@@ -185,15 +208,15 @@ function renderCard(card) {
   const items = attachmentsFor(comment);
   const signature = items.map((item) => `${item.type}:${item.url}:${item.previewUrl}`).join('|');
   const existing = card.querySelector('.comment-attachments');
-  if (existing?.dataset.signature === signature) return;
+  if (renderedSignatureByCard.get(card) === signature && Boolean(existing) === Boolean(items.length)) return;
   existing?.remove();
+  renderedSignatureByCard.set(card, signature);
 
   text.hidden = !String(comment.text || '').trim();
   if (!items.length) return;
 
   const container = document.createElement('div');
   container.className = 'comment-attachments';
-  container.dataset.signature = signature;
   items.forEach((item) => container.appendChild(makeInlineMedia(comment, item)));
   text.insertAdjacentElement('afterend', container);
 }
