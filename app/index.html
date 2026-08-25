@@ -17,14 +17,11 @@
   <div id="cc-boot-error" hidden style="position:fixed;z-index:99999;left:20px;right:20px;top:20px;padding:14px 16px;background:#fff2f2;color:#8d1c1c;border:1px solid #e6b4b4;font:13px/1.45 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.12)"></div>
 
   <main class="app-shell">
-    <aside class="left-panel" aria-label="Main navigation" title="Navigation, saved views, and source list.">
+    <header class="app-global-topbar" aria-label="Application navigation">
       <div class="brand">
         <span class="brand-mark">CC</span>
         <div class="brand-copy"><strong>Comment Collection</strong><span>0.5.3</span></div>
       </div>
-      <button class="sidebar-add-link" id="add-link-button" type="button">+ Add link</button>
-      <div class="sidebar-main-separator" aria-hidden="true"></div>
-
       <nav class="left-nav" id="main-nav">
         <button class="nav-item is-active" data-view="sources"><span class="nav-icon">▦</span><span>Sources</span></button>
         <button class="nav-item" data-view="all"><span class="nav-icon">☰</span><span>All comments</span></button>
@@ -32,6 +29,11 @@
         <button class="nav-item" data-view="read"><span class="nav-icon">✓</span><span>Read</span></button>
         <button class="nav-item" data-view="deleted"><span class="nav-icon">×</span><span>Deleted</span></button>
       </nav>
+    </header>
+
+    <aside class="left-panel" aria-label="Sources and utilities" title="Source list, add link, Help, and Settings.">
+      <button class="sidebar-add-link" id="add-link-button" type="button">+ Add link</button>
+      <div class="sidebar-main-separator" aria-hidden="true"></div>
 
       <section class="sources-section">
         <div class="section-label"><span>Sources</span><button id="left-add-link" title="Add link">+</button></div>
