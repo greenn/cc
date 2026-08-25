@@ -4,7 +4,7 @@
 
 The CC application version uses the form `0.MINOR.PATCH`.
 
-Current baseline version: `0.5.19`.
+Current baseline version: `0.5.20`.
 
 Rules:
 
@@ -19,8 +19,8 @@ Rules:
 
 Example from the current development day:
 
-- current version: `0.5.19`;
-- another change on the same day: `0.5.20`;
+- current version: `0.5.20`;
+- another change on the same day: `0.5.21`;
 - the first change on the next active development day: `0.6.1`;
 - the next change that same new day: `0.6.2`.
 
@@ -76,8 +76,7 @@ These are default product conventions for applications we build:
 - A zero-comment scrape is not proof that the Instagram source was deleted. Keep the source and leave Refresh available; do not offer destructive deletion based only on missing rendered comment markup.
 - For `/reels/<id>/` sources, use the canonical `/reel/<id>/` route in the temporary worker tab because the plural route behaves like a feed and is less stable for automated comment loading.
 - Reel comment collection should open the Comments panel if necessary, then accumulate parsed comments while clicking load/reply controls and scrolling the comments panel. Do not return only the final currently-rendered DOM viewport because Instagram can virtualize the list.
-- Mix targeted comment-container scrolling with periodic PageDown-style movement. A synthetic PageDown event may be sent for page handlers, but always pair it with an explicit page-sized scroll of the comments container because synthetic keyboard events do not reliably trigger browser-native scrolling.
-- Settings includes an experimental `PageDown only` mode for Instagram. When enabled, Refresh/Load more skip the normal direct-scroll and load-more-button strategy and use only PageDown-style page-sized movement inside the detected Comments scroller. Keep the setting local to CC and apply it to both Refresh and Load more. This mode is primarily for testing Instagram's own lazy-loading behavior and works best while the temporary worker tab is actually focused; do not claim a synthetic PageDown is equivalent to a trusted physical keypress in an unfocused tab.
+- Mix targeted comment-container scrolling with occasional PageDown-style movement, but do not expose a PageDown-only setting. Synthetic PageDown does not reliably make Instagram advance in an unfocused worker tab; when deeper loading depends on real browser focus, manual use of the temporary worker tab is an accepted workflow.
 - During Instagram Refresh/Load more, stream live helper progress back to CC. Show the number of unique comments found in the current helper pass, how many have already been streamed and persisted by CC, the current phase, and crawl step.
 - Stream discovered comments to CC immediately in small batches instead of keeping the entire result only inside the worker tab until the end. CC must upsert each incoming batch synchronously into local storage.
 - If the user closes the temporary worker tab early, all batches that were already streamed to CC remain saved. Losing the worker must not roll back already persisted comments; the operation should end with an explicit interrupted/worker-closed message.
@@ -95,10 +94,12 @@ These are default product conventions for applications we build:
 ## Comment media
 
 - A collected comment may contain an `attachments` array with image/GIF/sticker or video items in addition to text.
-- Exclude the comment author's avatar from attachment detection. Prefer visible media that belongs to the comment container itself; do not treat the Reel/post media or unrelated Instagram UI assets as comment attachments.
+- Instagram attachment detection should inspect normal images, `srcset`/`picture` media, CSS/`role=img` backgrounds, video/source elements, and direct media links found inside the nearest valid comment container.
+- Exclude the comment author's avatar from attachment detection. Prefer media that belongs to the comment container itself; do not treat the Reel/post media or unrelated Instagram UI assets as comment attachments.
 - A comment with no meaningful text is still valid when it contains a detected attachment.
-- Render collected comment attachments directly under the comment text. Images/GIFs are lazy-loaded and open their original URL in a new tab; video attachments use native controls.
-- Store attachment URLs with the comment in CC local data. Do not mirror comment attachments to the PHP backend unless that storage policy is explicitly changed later.
+- Render collected comment attachments directly under the comment text. Images/GIFs are lazy-loaded and open their original URL in a new tab; video attachments use native controls when a direct HTTP media URL is available. If Instagram exposes only a video poster/preview, show that preview and link back to the original comment.
+- When a source is open, expose an `Attachments · N` action in the source header. It opens a gallery containing every collected comment attachment for that source, with author, comment snippet, and original-comment link.
+- Store attachment URLs/previews with the comment in CC local data. Do not mirror comment attachments to the PHP backend unless that storage policy is explicitly changed later.
 - Instagram CDN attachment URLs may expire; if that becomes a practical problem, add an explicit local/helper caching layer rather than silently duplicating all media by default.
 
 ## Comment author accounts
