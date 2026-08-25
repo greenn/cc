@@ -1,4 +1,4 @@
-const VERSION = '0.5.17';
+const VERSION = '0.5.18';
 
 const modules = [
   './boot-route.js',
@@ -7,6 +7,7 @@ const modules = [
   './source-groups.js',
   './source-meta.js',
   './instagram-media.js',
+  './instagram-stream.js',
   './instagram-progress.js',
   './comment-accounts.js',
   './vk-settings.js',
@@ -15,6 +16,7 @@ const modules = [
   './whisper-settings.js',
   './transcript.js',
   './comment-ui.js',
+  './comment-media.js',
   './comment-gestures.js',
   './comment-translate.js',
   './shortcuts.js',
