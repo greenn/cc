@@ -33,6 +33,20 @@ async function injectBridgeIntoOpenCcTabs() {
   }));
 }
 
+async function broadcastHelperProgress(sourceId, progress) {
+  const tabs = await chrome.tabs.query({ url: CC_PAGE_PATTERNS });
+  await Promise.all(tabs.filter((tab) => tab.id).map((tab) => new Promise((resolve) => {
+    chrome.tabs.sendMessage(tab.id, {
+      type: 'CC_HELPER_PROGRESS',
+      sourceId: sourceId || '',
+      progress: progress || {},
+    }, () => {
+      void chrome.runtime.lastError;
+      resolve();
+    });
+  })));
+}
+
 setGlobalBadge();
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -146,6 +160,15 @@ async function decorateCollectResult(tabId, result) {
 async function collectInstagram(payload, caller) {
   if (!payload?.url) throw new Error('Instagram URL is missing.');
 
+  await broadcastHelperProgress(payload.sourceId, {
+    phase: 'opening',
+    collected: 0,
+    clicks: 0,
+    scrollMoves: 0,
+    step: 0,
+    maxSteps: 0,
+  });
+
   const tabId = await createInstagramWorkerTab(payload.url, caller);
   await new Promise((resolve) => setTimeout(resolve, 1200));
   await restoreCallerFocus(caller);
@@ -161,6 +184,14 @@ async function collectInstagram(payload, caller) {
       await restoreCallerFocus(caller);
       return await decorateCollectResult(tabId, result);
     } catch (error) {
+      await broadcastHelperProgress(payload.sourceId, {
+        phase: 'retrying',
+        collected: 0,
+        clicks: 0,
+        scrollMoves: 0,
+        step: 0,
+        maxSteps: 0,
+      });
       await new Promise((resolve) => setTimeout(resolve, 1500));
       await restoreCallerFocus(caller);
       const result = await sendTabMessage(tabId, {
@@ -283,13 +314,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === 'CC_INSTAGRAM_PROGRESS') {
+    void broadcastHelperProgress(message.sourceId, message.progress || {});
+    sendResponse({ ok: true });
+    return false;
+  }
+
   if (message?.type !== 'CC_HELPER_REQUEST') return false;
 
   (async () => {
     setConnectedBadge(sender.tab?.id);
 
     if (message.action === 'ping') {
-      return { version: chrome.runtime.getManifest().version, capabilities: ['instagram', 'instagram-media-download'] };
+      return { version: chrome.runtime.getManifest().version, capabilities: ['instagram', 'instagram-media-download', 'instagram-progress'] };
     }
     if (message.action === 'instagram.collect') {
       return await collectInstagram(message.payload || {}, callerFromSender(sender));
