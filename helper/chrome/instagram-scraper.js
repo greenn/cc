@@ -337,9 +337,12 @@
     let scrollMoves = 0;
     let stableRounds = 0;
     let previousSize = accumulator.size;
-    const maxSteps = Math.max(45, Math.min(140, maxClicks * 3));
+    const maxSteps = Math.max(60, Math.min(720, maxClicks * 3));
+    const stableLimit = Math.min(36, Math.max(8, 7 + Math.floor(maxClicks / 8)));
+    const deepMode = maxClicks > 40;
+    let steps = 0;
 
-    for (let step = 0; step < maxSteps && stableRounds < 7; step += 1) {
+    for (; steps < maxSteps && stableRounds < stableLimit; steps += 1) {
       if (isLoggedOut()) break;
       if (isReelPage() && !commentsPanelOpen()) await openReelCommentsIfNeeded(3500);
 
@@ -355,7 +358,7 @@
           buttons[0].click();
           clicks += 1;
           progressed = true;
-          await sleep(850);
+          await sleep(deepMode ? 700 : 850);
           mergeComments(accumulator, collect(url, sourceId));
         } catch { /* try scrolling instead */ }
       } else {
@@ -363,16 +366,22 @@
         if (scroller) {
           const before = scroller.scrollTop;
           const beforeHeight = scroller.scrollHeight;
-          scroller.scrollTop = Math.min(scroller.scrollHeight, before + Math.max(320, scroller.clientHeight * 0.82));
-          await sleep(850);
+          const multiplier = deepMode ? 1.2 : 0.82;
+          scroller.scrollTop = Math.min(scroller.scrollHeight, before + Math.max(320, scroller.clientHeight * multiplier));
+          await sleep(deepMode ? 650 : 850);
           const moved = Math.abs(scroller.scrollTop - before) > 2 || scroller.scrollHeight > beforeHeight;
           if (moved) {
             scrollMoves += 1;
             progressed = true;
+          } else if (deepMode) {
+            // At a temporary bottom Instagram can still append another chunk a
+            // moment later. Give deep-load passes a little more time before
+            // deciding that the list is stable.
+            await sleep(750);
           }
           mergeComments(accumulator, collect(url, sourceId));
         } else {
-          await sleep(650);
+          await sleep(deepMode ? 900 : 650);
         }
       }
 
@@ -398,6 +407,12 @@
       scrollTop: scroller ? Math.round(scroller.scrollTop) : null,
       scrollHeight: scroller ? scroller.scrollHeight : null,
       clientHeight: scroller ? scroller.clientHeight : null,
+      maxClicks,
+      maxSteps,
+      steps,
+      stableRounds,
+      stableLimit,
+      stoppedBy: steps >= maxSteps ? 'step-limit' : stableRounds >= stableLimit ? 'stable' : 'other',
     };
 
     return {
@@ -405,7 +420,7 @@
       clicks,
       pageUrl: location.href,
       diagnostics,
-      note: 'Instagram DOM is private and can change; CC accumulates comments while expanding and scrolling the comment panel.',
+      note: 'Instagram DOM is private and can change; deeper CC passes revisit the temporary Reel page with a larger crawl budget and merge newly discovered comments locally.',
     };
   }
 
