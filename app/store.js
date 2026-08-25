@@ -31,6 +31,32 @@ function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function attachmentKey(item) {
+  if (!item || typeof item !== 'object') return '';
+  return `${item.type || 'image'}:${item.url || item.previewUrl || item.poster || item.thumbnail || ''}`;
+}
+
+function mergeAttachments(previous, incoming) {
+  const result = [];
+  const seen = new Set();
+  for (const item of [...(Array.isArray(previous) ? previous : []), ...(Array.isArray(incoming) ? incoming : [])]) {
+    const key = attachmentKey(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+function instagramFallbackKey(comment) {
+  if (!String(comment?.id || '').startsWith('instagram:')) return '';
+  const username = String(comment.authorUsername || comment.authorName || '').trim().toLowerCase();
+  const publishedAt = String(comment.publishedAt || '').trim();
+  const text = String(comment.text || '').trim();
+  if (!username || (!publishedAt && !text)) return '';
+  return `${username}\n${publishedAt}\n${text}`;
+}
+
 export const store = {
   getState() {
     return state;
@@ -96,11 +122,18 @@ export const store = {
   upsertComments(sourceId, incoming) {
     const existing = state.comments[sourceId] || [];
     const byPlatformId = new Map(existing.map((comment) => [comment.platformCommentId, comment]));
+    const byInstagramFallback = new Map(existing
+      .map((comment) => [instagramFallbackKey(comment), comment])
+      .filter(([key]) => Boolean(key)));
 
     for (const next of incoming) {
-      const old = byPlatformId.get(next.platformCommentId);
+      const fallbackKey = instagramFallbackKey(next);
+      const old = byPlatformId.get(next.platformCommentId)
+        || (fallbackKey ? byInstagramFallback.get(fallbackKey) : null);
       if (old) {
+        const attachments = mergeAttachments(old.attachments, next.attachments);
         Object.assign(old, next, {
+          attachments,
           read: old.read,
           readAt: old.readAt,
           saved: old.saved,
@@ -113,9 +146,13 @@ export const store = {
           createdAt: old.createdAt,
           updatedAt: new Date().toISOString(),
         });
+        byPlatformId.set(old.platformCommentId, old);
+        const newFallbackKey = instagramFallbackKey(old);
+        if (newFallbackKey) byInstagramFallback.set(newFallbackKey, old);
       } else {
-        existing.push({
+        const created = {
           ...next,
+          attachments: mergeAttachments([], next.attachments),
           read: false,
           readAt: null,
           saved: false,
@@ -127,7 +164,11 @@ export const store = {
           note: '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        });
+        };
+        existing.push(created);
+        byPlatformId.set(created.platformCommentId, created);
+        const newFallbackKey = instagramFallbackKey(created);
+        if (newFallbackKey) byInstagramFallback.set(newFallbackKey, created);
       }
     }
 
