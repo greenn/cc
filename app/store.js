@@ -311,6 +311,23 @@ export const store = {
     return comment;
   },
 
+  updateCommentsBatch(sourceId, updates) {
+    const comments = state.comments[sourceId] || [];
+    const byId = new Map(comments.map((comment) => [comment.id, comment]));
+    const now = new Date().toISOString();
+    let changed = 0;
+
+    for (const update of Array.isArray(updates) ? updates : []) {
+      const comment = byId.get(update?.commentId);
+      if (!comment || !update?.patch || typeof update.patch !== 'object') continue;
+      Object.assign(comment, update.patch, { updatedAt: now });
+      changed += 1;
+    }
+
+    if (changed) persist();
+    return changed;
+  },
+
   markRead(sourceId, commentId) {
     const comment = this.getComment(sourceId, commentId);
     if (!comment || comment.read) return comment;

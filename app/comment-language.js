@@ -125,20 +125,28 @@ export async function detectTextLanguage(text, { onProgress } = {}) {
   return language;
 }
 
-export function recordDetectedLanguage(sourceId, commentId, language, method = 'detector') {
+function detectedLanguagePatch(language, method) {
   const normalized = normalizedLanguage(language) || 'general';
+  return {
+    language: normalized,
+    patch: {
+      detectedLanguage: normalized,
+      languageDetectionMethod: method,
+      languageDetectedAt: new Date().toISOString(),
+    },
+  };
+}
+
+export function recordDetectedLanguage(sourceId, commentId, language, method = 'detector') {
   const comment = store.getComment(sourceId, commentId);
   if (!comment) return null;
 
-  const updated = store.updateComment(sourceId, commentId, {
-    detectedLanguage: normalized,
-    languageDetectionMethod: method,
-    languageDetectedAt: new Date().toISOString(),
-  });
+  const detected = detectedLanguagePatch(language, method);
+  const updated = store.updateComment(sourceId, commentId, detected.patch);
 
   scheduleSummary();
   document.dispatchEvent(new CustomEvent('cc:language-updated', {
-    detail: { sourceId, commentId, language: normalized },
+    detail: { sourceId, commentId, language: detected.language },
   }));
   return updated;
 }
@@ -220,6 +228,35 @@ async function scanSource(sourceId) {
   }
 
   scanningSources.add(sourceId);
+  const pendingUpdates = [];
+
+  const flushUpdates = () => {
+    if (!pendingUpdates.length) return;
+    const batch = pendingUpdates.splice(0, pendingUpdates.length);
+    store.updateCommentsBatch(sourceId, batch.map((item) => ({
+      commentId: item.commentId,
+      patch: item.patch,
+    })));
+
+    document.dispatchEvent(new CustomEvent('cc:languages-updated', {
+      detail: {
+        sourceId,
+        commentIds: batch.map((item) => item.commentId),
+      },
+    }));
+    scheduleSummary();
+  };
+
+  const queueLanguage = (commentId, language, method) => {
+    const detected = detectedLanguagePatch(language, method);
+    pendingUpdates.push({
+      commentId,
+      language: detected.language,
+      patch: detected.patch,
+    });
+    if (pendingUpdates.length >= 24) flushUpdates();
+  };
+
   try {
     const comments = store.getComments(sourceId);
     let processed = 0;
@@ -228,13 +265,13 @@ async function scanSource(sourceId) {
       if (comment.detectedLanguage) continue;
 
       if (comment.translationSourceLanguage) {
-        recordDetectedLanguage(sourceId, comment.id, comment.translationSourceLanguage, 'translation-cache');
+        queueLanguage(comment.id, comment.translationSourceLanguage, 'translation-cache');
         continue;
       }
 
       const immediate = getImmediateLanguage(comment.text);
       if (immediate) {
-        recordDetectedLanguage(sourceId, comment.id, immediate, immediate === 'emoji' ? 'emoji' : 'rule');
+        queueLanguage(comment.id, immediate, immediate === 'emoji' ? 'emoji' : 'rule');
         continue;
       }
 
@@ -242,17 +279,25 @@ async function scanSource(sourceId) {
 
       try {
         const language = await detectTextLanguage(comment.text);
-        recordDetectedLanguage(sourceId, comment.id, language, language === 'general' ? 'detector-low-confidence' : 'detector');
+        queueLanguage(
+          comment.id,
+          language,
+          language === 'general' ? 'detector-low-confidence' : 'detector'
+        );
       } catch (error) {
         console.warn('[CC language] automatic detection failed', { commentId: comment.id, error });
       }
 
       processed += 1;
       if (processed % 8 === 0) {
+        flushUpdates();
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }
+
+    flushUpdates();
   } finally {
+    flushUpdates();
     scanningSources.delete(sourceId);
     scheduleSummary();
     if (rescanSources.delete(sourceId)) {
@@ -288,6 +333,7 @@ document.addEventListener('click', (event) => {
 
 window.addEventListener('popstate', scheduleScan);
 document.addEventListener('cc:language-updated', scheduleSummary);
+document.addEventListener('cc:languages-updated', scheduleSummary);
 
 scheduleScan();
 scheduleSummary();

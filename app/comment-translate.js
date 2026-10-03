@@ -246,6 +246,18 @@ document.addEventListener('cc:language-updated', (event) => {
   if (card) renderCardTranslation(card);
 });
 
+document.addEventListener('cc:languages-updated', (event) => {
+  const sourceId = event.detail?.sourceId;
+  const commentIds = new Set(event.detail?.commentIds || []);
+  if (!sourceId || !commentIds.size || !commentsList) return;
+
+  commentsList.querySelectorAll('.comment-card').forEach((card) => {
+    if (card.dataset.sourceId === sourceId && commentIds.has(card.dataset.commentId)) {
+      renderCardTranslation(card);
+    }
+  });
+});
+
 ensureStyles();
 if (commentsList) {
   new MutationObserver(bindAll).observe(commentsList, { childList: true });
