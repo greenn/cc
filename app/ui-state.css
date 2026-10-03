@@ -193,6 +193,27 @@
   white-space: nowrap;
 }
 
+.comments-list.is-ultra-reading .comment-card.is-selected .comment-translate-action {
+  order: 1;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected [data-action="save"] {
+  order: 2;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected [data-action="highlight"] {
+  order: 3;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected [data-action="delete"],
+.comments-list.is-ultra-reading .comment-card.is-selected [data-action="restore"] {
+  order: 4;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected .comment-ultra-original {
+  order: 5;
+}
+
 .comments-list.is-ultra-reading .comment-card.is-selected .comment-ultra-original {
   display: inline-block;
 }
