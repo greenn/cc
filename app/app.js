@@ -248,6 +248,7 @@ function renderComments() {
               <button data-action="save" title="Save">${comment.saved ? '★ Saved' : '☆ Save'}</button>
               ${comment.deleted ? '<button data-action="restore">↶ Restore</button>' : '<button data-action="delete">× Delete</button>'}
               <button data-action="highlight" title="Save and highlight">${comment.highlighted ? '✦ Highlighted' : '✧ Highlight'}</button>
+              ${comment.originalUrl ? '<button class="comment-ultra-original" data-action="open" title="Open original">↗ Original</button>' : ''}
             </div>
           </div>
         </div>

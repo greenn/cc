@@ -100,6 +100,126 @@
   cursor: default;
 }
 
+.source-meta-tool:not([disabled]) {
+  cursor: pointer;
+}
+
+.source-meta-tool.is-active {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  font-weight: 700;
+}
+
+.comment-ultra-original {
+  display: none;
+}
+
+.comments-list.is-ultra-reading {
+  margin-top: 10px;
+}
+
+.comments-list.is-ultra-reading .comment-card {
+  display: block;
+  position: relative;
+  min-height: 0;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  cursor: pointer;
+}
+
+.comments-list.is-ultra-reading .comment-card::before,
+.comments-list.is-ultra-reading .comment-avatar,
+.comments-list.is-ultra-reading .comment-head,
+.comments-list.is-ultra-reading .comment-stats,
+.comments-list.is-ultra-reading .comment-attachments {
+  display: none !important;
+}
+
+.comments-list.is-ultra-reading .comment-body {
+  position: relative;
+  min-width: 0;
+}
+
+.comments-list.is-ultra-reading .comment-text {
+  margin: 0;
+  max-width: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.comments-list.is-ultra-reading .comment-footer {
+  display: none;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected {
+  z-index: 4;
+  background: rgba(47, 25, 215, 0.035);
+  outline: 1px solid rgba(47, 25, 215, 0.10);
+  outline-offset: -1px;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected .comment-footer {
+  display: block;
+  position: absolute;
+  z-index: 8;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  margin: 0;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected .comment-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  max-width: min(520px, 70vw);
+  padding: 8px 10px;
+  border: 1px solid #dcdcdc;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .12);
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected .comment-actions button {
+  padding: 3px 0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.comments-list.is-ultra-reading .comment-card.is-selected .comment-ultra-original {
+  display: inline-block;
+}
+
+@media (max-width: 680px) {
+  .comments-list.is-ultra-reading .comment-card {
+    padding-block: 8px;
+  }
+
+  .comments-list.is-ultra-reading .comment-card.is-selected {
+    padding-bottom: 48px;
+  }
+
+  .comments-list.is-ultra-reading .comment-card.is-selected .comment-footer {
+    top: auto;
+    right: 4px;
+    bottom: 7px;
+    left: 4px;
+    transform: none;
+  }
+
+  .comments-list.is-ultra-reading .comment-card.is-selected .comment-actions {
+    max-width: none;
+    justify-content: flex-end;
+  }
+}
+
 .source-language-summary {
   margin-top: 4px;
   min-height: 14px;

@@ -107,8 +107,8 @@ function renderSourceMeta() {
     ultra.className = 'source-meta-tool';
     ultra.dataset.sourceTool = 'ultra-reading';
     ultra.textContent = 'Ultra reading';
-    ultra.title = 'Ultra reading mode will be enabled in the next implementation set.';
-    ultra.disabled = true;
+    ultra.title = 'Toggle compact comment reading mode.';
+    ultra.setAttribute('aria-pressed', 'false');
     tools.appendChild(ultra);
 
     const emoji = document.createElement('button');

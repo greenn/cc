@@ -1,4 +1,4 @@
-const VERSION = '0.6.2';
+const VERSION = '0.6.3';
 
 const modules = [
   './boot-route.js',
@@ -7,6 +7,7 @@ const modules = [
   './settings-tabs.js',
   './source-groups.js',
   './source-meta.js',
+  './ultra-reading.js',
   './instagram-media.js',
   './instagram-stream.js',
   './instagram-progress.js',
