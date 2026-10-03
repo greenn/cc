@@ -231,9 +231,7 @@
 }
 
 body.is-emoji-view #comments-list,
-body.is-emoji-view #empty-state,
-body.is-emoji-view #loading-more,
-body.is-emoji-view #load-sentinel {
+body.is-emoji-view #empty-state {
   display: none !important;
 }
 
