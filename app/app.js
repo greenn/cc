@@ -49,6 +49,7 @@ let scrollingDown = true;
 let readObserver = null;
 let loadObserver = null;
 let noteTimer = null;
+const metadataLoadingSourceIds = new Set();
 
 function escapeHtml(value = '') {
   return String(value)
@@ -95,6 +96,41 @@ function canAutoLoad(source) {
   if (!source || source.hasMore === false) return false;
   if (source.platform === 'vk' && !store.getSettings().vkAccessToken) return false;
   return true;
+}
+
+async function enrichSourceMetadata(sourceId, { force = false } = {}) {
+  const source = store.getSource(sourceId);
+  if (!source || source.platform !== 'youtube' || !source.url) return source;
+  if (!force && source.channelId && source.authorUrl) return source;
+  if (metadataLoadingSourceIds.has(sourceId)) return source;
+
+  const adapter = sourceAdapter(source);
+  if (!adapter?.getPost) return source;
+
+  metadataLoadingSourceIds.add(sourceId);
+  try {
+    const fresh = await adapter.getPost(source.url, store.getSettings());
+    const patch = {
+      title: fresh.title || source.title,
+      author: fresh.author || source.author,
+      channelId: fresh.channelId || source.channelId || '',
+      authorUrl: fresh.authorUrl || source.authorUrl || '',
+      thumbnail: fresh.thumbnail || source.thumbnail || '',
+      publishedAt: fresh.publishedAt || source.publishedAt || null,
+      commentCount: Number.isFinite(Number(fresh.commentCount))
+        ? Number(fresh.commentCount)
+        : source.commentCount,
+      metadataUpdatedAt: new Date().toISOString(),
+    };
+    store.updateSource(sourceId, patch);
+    if (currentSourceId === sourceId) render();
+    return store.getSource(sourceId);
+  } catch (error) {
+    console.warn('[CC YouTube] could not refresh source metadata', { sourceId, error });
+    return source;
+  } finally {
+    metadataLoadingSourceIds.delete(sourceId);
+  }
 }
 
 function getScopeComments() {
@@ -314,6 +350,9 @@ function selectSource(sourceId) {
   selectedCommentId = null;
   render();
   const source = store.getSource(sourceId);
+  if (source?.platform === 'youtube' && (!source.channelId || !source.authorUrl)) {
+    void enrichSourceMetadata(sourceId);
+  }
   if (!store.getComments(sourceId).length && canAutoLoad(source)) loadMoreComments(sourceId);
   restorePosition(sourceId);
 }
@@ -489,7 +528,14 @@ $$('#top-tabs .top-tab').forEach((button) => button.addEventListener('click', ()
 ['#add-link-button', '#left-add-link', '#empty-add-link'].forEach((selector) => $(selector)?.addEventListener('click', openAddDialog));
 $('#settings-button').addEventListener('click', openSettings);
 $('#help-button').addEventListener('click', () => showStatus('YouTube uses YouTube Data API. VK uses video.getComments with your user token. Instagram uses CC Browser Helper with your signed-in browser session. Forums use per-site adapters. Passing the center line marks comments read. J/K navigate, S saves, H highlights, D deletes, O opens original.'));
-ui.refresh.addEventListener('click', () => currentSourceId && loadMoreComments(currentSourceId, { refresh: true }));
+ui.refresh.addEventListener('click', async () => {
+  if (!currentSourceId) return;
+  const source = store.getSource(currentSourceId);
+  if (source?.platform === 'youtube') {
+    await enrichSourceMetadata(currentSourceId, { force: true });
+  }
+  await loadMoreComments(currentSourceId, { refresh: true });
+});
 ui.search.addEventListener('input', renderComments);
 ui.sort.addEventListener('change', renderComments);
 
