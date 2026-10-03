@@ -3,7 +3,7 @@ import { store } from './store.js';
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const ROUTE_KEYS = ['view', 'source', 'filter', 'comment'];
+const ROUTE_KEYS = ['view', 'source', 'filter', 'comment', 'mode'];
 let applyingRoute = false;
 let initialized = false;
 let postFrame = null;
@@ -389,14 +389,21 @@ document.addEventListener('click', (event) => {
   const filterButton = event.target.closest?.('#top-tabs .top-tab[data-filter]');
   if (filterButton?.dataset.filter) {
     const activeSource = $('.source-item.is-active')?.dataset.sourceId;
-    if (activeSource) writeRoute({ source: activeSource, filter: filterButton.dataset.filter });
+    const mode = routeUrl().searchParams.get('mode');
+    if (activeSource) writeRoute({ source: activeSource, filter: filterButton.dataset.filter, mode });
     return;
   }
 
   const commentCard = event.target.closest?.('.comment-card');
   if (commentCard?.dataset.commentId && !event.target.closest?.('[data-action]')) {
     const activeFilter = $('#top-tabs .top-tab.is-active')?.dataset.filter || 'comments';
-    writeRoute({ source: commentCard.dataset.sourceId, filter: activeFilter, comment: commentCard.dataset.commentId });
+    const mode = routeUrl().searchParams.get('mode');
+    writeRoute({
+      source: commentCard.dataset.sourceId,
+      filter: activeFilter,
+      comment: commentCard.dataset.commentId,
+      mode,
+    });
   }
 });
 

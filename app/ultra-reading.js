@@ -53,7 +53,7 @@ function toggleMode() {
   else url.searchParams.set('mode', 'ultra');
 
   history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`);
-  applyMode();
+  document.dispatchEvent(new CustomEvent('cc:view-mode-changed'));
 }
 
 document.addEventListener('click', (event) => {
@@ -71,6 +71,7 @@ document.addEventListener('click', (event) => {
 });
 
 window.addEventListener('popstate', applyMode);
+document.addEventListener('cc:view-mode-changed', applyMode);
 
 if (commentsList) {
   new MutationObserver(applyMode).observe(commentsList, { childList: true });

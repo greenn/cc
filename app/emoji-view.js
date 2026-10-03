@@ -93,7 +93,10 @@ function renderView() {
     return;
   }
 
-  const comments = store.getComments(source.id);
+  const allComments = store.getComments(source.id);
+  const comments = [...commentsList.querySelectorAll('.comment-card')]
+    .map((card) => store.getComment(card.dataset.sourceId, card.dataset.commentId))
+    .filter(Boolean);
   const counts = new Map();
   const firstSeen = new Map();
   const groups = [];
@@ -123,10 +126,11 @@ function renderView() {
 
   const loaded = document.createElement('p');
   const totalComments = Number(source.commentCount);
-  const totalLabel = Number.isFinite(totalComments) && totalComments >= 0
-    ? `${comments.length} of ${totalComments} comments loaded`
-    : `${comments.length} comments loaded`;
-  loaded.textContent = `${totalLabel} · ${totalEmoji} emoji`;
+  const loadedCount = allComments.length;
+  const loadedLabel = Number.isFinite(totalComments) && totalComments >= 0
+    ? `${loadedCount} of ${totalComments} loaded`
+    : `${loadedCount} loaded`;
+  loaded.textContent = `${comments.length} comments in view · ${loadedLabel} · ${totalEmoji} emoji`;
   intro.appendChild(loaded);
   fragment.appendChild(intro);
 
@@ -211,7 +215,7 @@ function toggleMode() {
   url.searchParams.delete('comment');
 
   history.pushState({}, '', `${url.pathname}${url.search}${url.hash}`);
-  applyMode();
+  document.dispatchEvent(new CustomEvent('cc:view-mode-changed'));
 }
 
 document.addEventListener('click', (event) => {
@@ -229,6 +233,7 @@ document.addEventListener('click', (event) => {
 });
 
 window.addEventListener('popstate', applyMode);
+document.addEventListener('cc:view-mode-changed', applyMode);
 
 if (commentsList) {
   new MutationObserver(scheduleRender).observe(commentsList, { childList: true });
