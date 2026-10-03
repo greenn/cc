@@ -1,9 +1,9 @@
 import { store } from './store.js';
+import { detectTextLanguage, languageBadge, recordDetectedLanguage } from './comment-language.js';
 
 const commentsList = document.querySelector('#comments-list');
 const statusBanner = document.querySelector('#status-banner');
 const translatorCache = new Map();
-let detectorPromise = null;
 
 function targetLanguage() {
   return String(store.getSettings().translationTargetLanguage || 'ru').toLowerCase();
@@ -58,45 +58,42 @@ function renderCardTranslation(card) {
   if (!found || !textNode || !button) return;
 
   const shown = Boolean(found.comment.translationRu && found.comment.translationShown);
+  const sourceLanguage = String(found.comment.detectedLanguage || found.comment.translationSourceLanguage || '').toLowerCase();
+  const sourceBadge = languageBadge(sourceLanguage);
+  const targetBadge = languageBadge(targetLanguage());
+
   textNode.textContent = shown ? found.comment.translationRu : found.comment.text;
   textNode.style.whiteSpace = 'pre-line';
   button.classList.toggle('is-active', shown);
   button.setAttribute('aria-pressed', shown ? 'true' : 'false');
-  button.title = shown ? 'Show original text' : `Translate this comment to ${targetLabel()}`;
+
+  if (sourceLanguage === 'emoji') {
+    button.textContent = 'Emoji';
+    button.disabled = true;
+    button.title = 'Emoji-only comment; translation is not needed.';
+    return;
+  }
+
+  button.disabled = false;
+  if (shown) {
+    button.textContent = sourceBadge ? `${sourceBadge} → ${targetBadge}` : 'Translated';
+    button.title = sourceBadge
+      ? `Translated from ${sourceBadge} to ${targetBadge}. Show original text.`
+      : 'Show original text';
+    return;
+  }
+
+  button.textContent = sourceBadge && sourceLanguage !== 'general'
+    ? `Translate · ${sourceBadge}`
+    : 'Translate';
+  button.title = sourceBadge && sourceLanguage !== 'general'
+    ? `Translate from ${sourceBadge} to ${targetBadge}`
+    : `Translate this comment to ${targetLabel()}`;
 }
 
 function setButtonProgress(button, label) {
   if (!button) return;
   button.textContent = label;
-}
-
-async function getDetector(button) {
-  if (!('LanguageDetector' in self)) {
-    throw new Error('Chrome Language Detector API is not available in this browser.');
-  }
-  if (!detectorPromise) {
-    detectorPromise = LanguageDetector.create({
-      monitor(monitor) {
-        monitor.addEventListener('downloadprogress', (event) => {
-          const percent = Math.round(Number(event.loaded || 0) * 100);
-          setButtonProgress(button, `Translate ${percent}%`);
-        });
-      },
-    }).catch((error) => {
-      detectorPromise = null;
-      throw error;
-    });
-  }
-  return detectorPromise;
-}
-
-async function detectLanguage(text, button) {
-  const detector = await getDetector(button);
-  const results = await detector.detect(String(text || '').slice(0, 12000));
-  const best = Array.isArray(results) ? results[0] : null;
-  const language = String(best?.detectedLanguage || '').toLowerCase();
-  if (!language || language === 'und') throw new Error('Could not reliably detect the comment language.');
-  return language;
 }
 
 async function getTranslator(sourceLanguage, button) {
@@ -137,8 +134,6 @@ async function translateComment(card, button) {
   const found = commentForCard(card);
   if (!found) return;
 
-  // Once translated, the button is a simple target/original toggle. The
-  // translation itself remains cached in the comment's local CC state.
   if (found.comment.translationRu) {
     store.updateComment(found.sourceId, found.commentId, {
       translationShown: !Boolean(found.comment.translationShown),
@@ -147,12 +142,42 @@ async function translateComment(card, button) {
     return;
   }
 
-  const originalLabel = 'Translate';
+  if (found.comment.detectedLanguage === 'emoji') {
+    renderCardTranslation(card);
+    return;
+  }
+
   button.disabled = true;
   setButtonProgress(button, 'Translate…');
 
   try {
-    const sourceLanguage = await detectLanguage(found.comment.text, button);
+    let sourceLanguage = String(
+      found.comment.detectedLanguage || found.comment.translationSourceLanguage || ''
+    ).toLowerCase();
+
+    if (!sourceLanguage || sourceLanguage === 'general') {
+      sourceLanguage = await detectTextLanguage(found.comment.text, {
+        onProgress(percent) {
+          setButtonProgress(button, `Detect ${percent}%`);
+        },
+      });
+      recordDetectedLanguage(
+        found.sourceId,
+        found.commentId,
+        sourceLanguage,
+        sourceLanguage === 'general' ? 'translate-undetermined' : 'translate'
+      );
+    }
+
+    if (sourceLanguage === 'emoji') {
+      renderCardTranslation(card);
+      return;
+    }
+
+    if (sourceLanguage === 'general') {
+      throw new Error('Could not reliably identify the comment language.');
+    }
+
     const target = targetLanguage();
     let translated = found.comment.text;
 
@@ -168,13 +193,17 @@ async function translateComment(card, button) {
       translationShown: true,
       translatedAt: new Date().toISOString(),
     });
+    recordDetectedLanguage(found.sourceId, found.commentId, sourceLanguage, 'translate');
     renderCardTranslation(card);
   } catch (error) {
     console.error('[CC translate] failed', error);
+    const current = store.getComment(found.sourceId, found.commentId);
+    if (!current?.detectedLanguage) {
+      recordDetectedLanguage(found.sourceId, found.commentId, 'general', 'translate-failed');
+    }
     showStatus(error?.message || `Could not translate this comment to ${targetLabel()}.`, 'error');
   } finally {
     button.disabled = false;
-    setButtonProgress(button, originalLabel);
     renderCardTranslation(card);
   }
 }
@@ -206,6 +235,16 @@ function bindCard(card) {
 function bindAll() {
   commentsList?.querySelectorAll('.comment-card').forEach(bindCard);
 }
+
+document.addEventListener('cc:language-updated', (event) => {
+  const sourceId = event.detail?.sourceId;
+  const commentId = event.detail?.commentId;
+  if (!sourceId || !commentId || !commentsList) return;
+  const card = [...commentsList.querySelectorAll('.comment-card')].find(
+    (item) => item.dataset.sourceId === sourceId && item.dataset.commentId === commentId
+  );
+  if (card) renderCardTranslation(card);
+});
 
 ensureStyles();
 if (commentsList) {

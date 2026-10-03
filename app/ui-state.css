@@ -100,6 +100,16 @@
   cursor: default;
 }
 
+.source-language-summary {
+  margin-top: 4px;
+  min-height: 14px;
+  overflow-wrap: anywhere;
+}
+
+.source-language-summary[hidden] {
+  display: none;
+}
+
 /* Explicit Instagram media downloads live beside Refresh. */
 .instagram-media-action[hidden] {
   display: none !important;

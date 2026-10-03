@@ -1,4 +1,4 @@
-const VERSION = '0.6.1';
+const VERSION = '0.6.2';
 
 const modules = [
   './boot-route.js',
@@ -23,6 +23,7 @@ const modules = [
   './comment-attachment-details.js',
   './instagram-helper-row.js',
   './comment-gestures.js',
+  './comment-language.js',
   './comment-translate.js',
   './shortcuts.js',
 ];
