@@ -1,6 +1,4 @@
 import { store } from './store.js';
-import './source-navigation.js?v=0.4.14';
-import './recognition-ui.js?v=0.4.14';
 
 const contentArea = document.querySelector('#content-area');
 const commentsList = document.querySelector('#comments-list');

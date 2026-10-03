@@ -1,4 +1,4 @@
-const VERSION = '0.6.7';
+const VERSION = '0.6.8';
 
 const modules = [
   './boot-route.js',
@@ -19,6 +19,8 @@ const modules = [
   './backend-settings.js',
   './whisper-settings.js',
   './transcript.js',
+  './source-navigation.js',
+  './recognition-ui.js',
   './comment-ui.js',
   './comment-state-sort.js',
   './comment-media.js',
