@@ -30,15 +30,26 @@
 /* Let long source metadata shrink inside the header instead of widening it. */
 .content-title-wrap {
   min-width: 0;
+  flex: 1 1 auto;
 }
 
-/* Source header: platform · author · original URL. Long URLs stay on one line,
-   scroll horizontally with the wheel/trackpad, and keep the scrollbar hidden. */
+/* Source header: platform · author · original URL on the left, source tools
+   on the right. Long metadata scrolls independently without moving the tools. */
 .source-meta-row {
   display: flex;
   align-items: center;
   min-width: 0;
   max-width: 100%;
+  gap: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.source-meta-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 auto;
   gap: 6px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -47,7 +58,7 @@
   overscroll-behavior-inline: contain;
 }
 
-.source-meta-row::-webkit-scrollbar {
+.source-meta-main::-webkit-scrollbar {
   display: none;
 }
 
@@ -66,6 +77,27 @@
 
 .source-meta-link:hover {
   color: var(--accent);
+}
+
+.source-meta-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.source-meta-tool {
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.source-meta-tool[disabled] {
+  opacity: .45;
+  cursor: default;
 }
 
 /* Explicit Instagram media downloads live beside Refresh. */

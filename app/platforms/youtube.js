@@ -60,6 +60,8 @@ export const youtubeAdapter = {
       url: `https://www.youtube.com/watch?v=${videoId}`,
       title: item.snippet?.title || 'YouTube video',
       author: item.snippet?.channelTitle || 'YouTube',
+      channelId: item.snippet?.channelId || '',
+      authorUrl: item.snippet?.channelId ? `https://www.youtube.com/channel/${item.snippet.channelId}` : '',
       thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '',
       publishedAt: item.snippet?.publishedAt || null,
       commentCount: Number(item.statistics?.commentCount || 0),
@@ -109,7 +111,6 @@ export const youtubeAdapter = {
       comments,
       nextCursor: data.nextPageToken || null,
       hasMore: Boolean(data.nextPageToken),
-      totalResults: Number(data.pageInfo?.totalResults || comments.length),
     };
   },
 };

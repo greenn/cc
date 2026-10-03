@@ -50,28 +50,43 @@ function renderSourceMeta() {
   const label = platformLabel(source.platform);
   const author = source.author || 'source';
   const url = String(source.url || '').trim();
+  const authorUrl = String(
+    source.authorUrl ||
+    (source.channelId ? `https://www.youtube.com/channel/${source.channelId}` : '')
+  ).trim();
 
   eyebrow.textContent = '';
   eyebrow.classList.add('source-meta-row');
 
+  const main = document.createElement('span');
+  main.className = 'source-meta-main';
+  eyebrow.appendChild(main);
+
   const platform = document.createElement('span');
   platform.textContent = label;
-  eyebrow.appendChild(platform);
+  main.appendChild(platform);
 
   const sep1 = document.createElement('span');
   sep1.className = 'source-meta-separator';
   sep1.textContent = '·';
-  eyebrow.appendChild(sep1);
+  main.appendChild(sep1);
 
-  const authorNode = document.createElement('span');
+  const authorNode = document.createElement(authorUrl ? 'a' : 'span');
   authorNode.textContent = author;
-  eyebrow.appendChild(authorNode);
+  if (authorUrl) {
+    authorNode.className = 'source-meta-link';
+    authorNode.href = authorUrl;
+    authorNode.target = '_blank';
+    authorNode.rel = 'noopener noreferrer';
+    authorNode.title = `Open channel: ${author}`;
+  }
+  main.appendChild(authorNode);
 
   if (url) {
     const sep2 = document.createElement('span');
     sep2.className = 'source-meta-separator';
     sep2.textContent = '·';
-    eyebrow.appendChild(sep2);
+    main.appendChild(sep2);
 
     const link = document.createElement('a');
     link.className = 'source-meta-link';
@@ -79,19 +94,43 @@ function renderSourceMeta() {
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.title = url;
-    link.textContent = url;
-    eyebrow.appendChild(link);
+    link.textContent = 'Link';
+    main.appendChild(link);
   }
 
-  eyebrow.onwheel = (event) => {
-    if (eyebrow.scrollWidth <= eyebrow.clientWidth) return;
+  if (source.platform === 'youtube') {
+    const tools = document.createElement('span');
+    tools.className = 'source-meta-tools';
+
+    const ultra = document.createElement('button');
+    ultra.type = 'button';
+    ultra.className = 'source-meta-tool';
+    ultra.dataset.sourceTool = 'ultra-reading';
+    ultra.textContent = 'Ultra reading';
+    ultra.title = 'Ultra reading mode will be enabled in the next implementation set.';
+    ultra.disabled = true;
+    tools.appendChild(ultra);
+
+    const emoji = document.createElement('button');
+    emoji.type = 'button';
+    emoji.className = 'source-meta-tool';
+    emoji.dataset.sourceTool = 'emoji';
+    emoji.textContent = 'Emoji';
+    emoji.title = 'Emoji view will be enabled in the next implementation set.';
+    emoji.disabled = true;
+    tools.appendChild(emoji);
+
+    eyebrow.appendChild(tools);
+  }
+
+  main.onwheel = (event) => {
+    if (main.scrollWidth <= main.clientWidth) return;
     const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
     if (!delta) return;
-    eyebrow.scrollLeft += delta;
+    main.scrollLeft += delta;
     event.preventDefault();
   };
 }
-
 function maybeOfferInstagramDelete() {
   if (!statusBanner || statusBanner.hidden) return;
   const text = statusBanner.textContent || '';
