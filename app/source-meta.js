@@ -116,8 +116,8 @@ function renderSourceMeta() {
     emoji.className = 'source-meta-tool';
     emoji.dataset.sourceTool = 'emoji';
     emoji.textContent = 'Emoji';
-    emoji.title = 'Emoji view will be enabled in the next implementation set.';
-    emoji.disabled = true;
+    emoji.title = 'Open emoji view for loaded comments.';
+    emoji.setAttribute('aria-pressed', 'false');
     tools.appendChild(emoji);
 
     eyebrow.appendChild(tools);

@@ -1,4 +1,4 @@
-const VERSION = '0.6.3';
+const VERSION = '0.6.4';
 
 const modules = [
   './boot-route.js',
@@ -8,6 +8,7 @@ const modules = [
   './source-groups.js',
   './source-meta.js',
   './ultra-reading.js',
+  './emoji-view.js',
   './instagram-media.js',
   './instagram-stream.js',
   './instagram-progress.js',

@@ -230,6 +230,100 @@
   display: none;
 }
 
+body.is-emoji-view #comments-list,
+body.is-emoji-view #empty-state,
+body.is-emoji-view #loading-more,
+body.is-emoji-view #load-sentinel {
+  display: none !important;
+}
+
+.emoji-view[hidden] {
+  display: none !important;
+}
+
+.emoji-view {
+  margin-top: 18px;
+}
+
+.emoji-view-intro {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.emoji-view-intro h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -.02em;
+}
+
+.emoji-view-intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.emoji-stream {
+  padding: 24px 0 28px;
+  border-bottom: 1px solid var(--line);
+  font-size: 26px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.emoji-message-group {
+  display: inline;
+  margin-right: 12px;
+  white-space: nowrap;
+}
+
+.emoji-glyph {
+  display: inline;
+}
+
+.emoji-stats {
+  padding-top: 22px;
+}
+
+.emoji-stats h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.emoji-stats-table {
+  max-width: 420px;
+  border-top: 1px solid var(--line);
+}
+
+.emoji-stats-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 42px;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.emoji-stats-glyph {
+  font-size: 22px;
+}
+
+.emoji-stats-count {
+  color: #555;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.emoji-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* Explicit Instagram media downloads live beside Refresh. */
 .instagram-media-action[hidden] {
   display: none !important;
