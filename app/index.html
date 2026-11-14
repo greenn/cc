@@ -5,22 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#fff6cf" />
   <title>CC — Comment Collection</title>
-  <link rel="stylesheet" href="./styles.css?v=0.6.10" />
-  <link rel="stylesheet" href="./ui-state.css?v=0.6.10" />
-  <link rel="stylesheet" href="./transcript.css?v=0.6.10" />
+  <link rel="stylesheet" href="./styles.css?v=0.7.1" />
+  <link rel="stylesheet" href="./ui-state.css?v=0.7.1" />
+  <link rel="stylesheet" href="./transcript.css?v=0.7.1" />
   <script>
     window.__CC_BOOT_STARTED_AT__ = performance.now();
-    console.info('[CC 0.6.10] HTML boot', { href: location.href, readyState: document.readyState });
+    console.info('[CC 0.7.1] HTML boot', { href: location.href, readyState: document.readyState });
   </script>
 </head>
 <body>
+  <dialog id="youtube-export-dialog" style="max-width:440px;padding:24px;border:1px solid #d8d8d8;box-shadow:0 20px 60px rgba(0,0,0,.18)">
+    <h2>Export YouTube comments</h2>
+    <p id="youtube-export-source"></p>
+    <p id="youtube-export-progress" role="status" aria-live="polite">Starting…</p>
+    <p>All available comments and replies are requested directly from YouTube. You can close this window while collection continues.</p>
+    <button id="youtube-export-close" type="button" class="ghost-action">Close</button>
+  </dialog>
   <div id="cc-boot-error" hidden style="position:fixed;z-index:99999;left:20px;right:20px;top:20px;padding:14px 16px;background:#fff2f2;color:#8d1c1c;border:1px solid #e6b4b4;font:13px/1.45 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.12)"></div>
 
   <main class="app-shell">
     <header class="app-global-topbar" aria-label="Application navigation">
       <div class="brand">
         <span class="brand-mark">CC</span>
-        <div class="brand-copy"><strong>Comment Collection</strong><span>0.6.10</span></div>
+        <div class="brand-copy"><strong>Comment Collection</strong><span>0.7.1</span></div>
       </div>
       <nav class="left-nav" id="main-nav">
         <button class="nav-item is-active" data-view="sources"><span class="nav-icon">▦</span><span>Sources</span></button>
@@ -77,6 +84,7 @@
           <div class="header-actions">
             <span class="whisper-indicator is-offline" id="whisper-indicator" hidden title="Local Whisper service status"><span class="whisper-dot"></span><span id="whisper-indicator-text">Whisper offline</span></span>
             <button class="transcript-task-chip" id="transcript-task-chip" type="button" hidden title="Open recognition progress">Recognizing…</button>
+            <button class="ghost-action" id="youtube-export-button" type="button" hidden title="Collect all accessible YouTube comments and replies into a JSON file">Export all · JSON</button>
             <button class="ghost-action" id="refresh-button" type="button" hidden>Refresh</button>
             <button class="primary-action" id="transcribe-button" type="button" hidden>Recognize video</button>
           </div>
@@ -226,7 +234,7 @@
   </dialog>
 
   <script type="module">
-    const VERSION = '0.6.10';
+    const VERSION = '0.7.1';
     const errorBox = document.querySelector('#cc-boot-error');
     const localBoot = `./app-boot.js?v=${VERSION}`;
     const fallbackBoot = `https://raw.githubusercontent.com/greenn/cc/main/app/app-boot.js?v=${VERSION}`;

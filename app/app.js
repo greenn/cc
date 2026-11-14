@@ -1,3 +1,4 @@
+import { exportYouTubeComments } from './youtube-export.js';
 import { store } from './store.js';
 import { youtubeAdapter } from './platforms/youtube.js';
 import { instagramAdapter } from './platforms/instagram.js';
@@ -335,6 +336,8 @@ function renderRightPanel() {
 function render() {
   renderSources();
   renderHeader();
+  const exportButton = $('#youtube-export-button');
+  exportButton.hidden = store.getSource(currentSourceId)?.platform !== 'youtube' || Boolean(globalView);
   renderComments();
   renderRightPanel();
 }
@@ -528,6 +531,34 @@ $$('#top-tabs .top-tab').forEach((button) => button.addEventListener('click', ()
 ['#add-link-button', '#left-add-link', '#empty-add-link'].forEach((selector) => $(selector)?.addEventListener('click', openAddDialog));
 $('#settings-button').addEventListener('click', openSettings);
 $('#help-button').addEventListener('click', () => showStatus('YouTube uses YouTube Data API. VK uses video.getComments with your user token. Instagram uses CC Browser Helper with your signed-in browser session. Forums use per-site adapters. Passing the center line marks comments read. J/K navigate, S saves, H highlights, D deletes, O opens original.'));
+const exportDialog = $('#youtube-export-dialog');
+$('#youtube-export-close').addEventListener('click', () => exportDialog.close());
+$('#youtube-export-button').addEventListener('click', async (event) => {
+  const button = event.currentTarget;
+  const source = store.getSource(currentSourceId);
+  if (!source || button.disabled) return;
+  const progress = $('#youtube-export-progress');
+  $('#youtube-export-source').textContent = source.title || source.url;
+  progress.textContent = 'Collecting comments and replies: 0';
+  if (!exportDialog.open) exportDialog.show();
+  button.disabled = true;
+  button.textContent = 'Collecting · 0';
+  try {
+    const count = await exportYouTubeComments(source, (number) => {
+      button.textContent = `Collecting · ${number}`;
+      progress.textContent = `Collecting comments and replies: ${number}`;
+    });
+    progress.textContent = `Complete: ${count} comments and replies. JSON download started.`;
+    showStatus(`JSON exported: ${count} comments and replies.`);
+  } catch (error) {
+    progress.textContent = error.message || 'Could not export comments.';
+    showStatus(progress.textContent, 'error');
+    if (!exportDialog.open) exportDialog.show();
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Export all · JSON';
+  }
+});
 ui.refresh.addEventListener('click', async () => {
   if (!currentSourceId) return;
   const source = store.getSource(currentSourceId);
