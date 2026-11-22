@@ -1,4 +1,4 @@
-const VERSION = '0.7.1';
+const VERSION = '0.7.2';
 
 const modules = [
   './boot-route.js',
@@ -11,6 +11,7 @@ const modules = [
   './emoji-view.js',
   './instagram-media.js',
   './instagram-stream.js',
+  './pikabu-progress.js',
   './instagram-progress.js',
   './instagram-worker-focus.js',
   './comment-accounts.js',
