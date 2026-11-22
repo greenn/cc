@@ -190,7 +190,7 @@ window.addEventListener('message', (event) => {
   const message = event.data;
   if (!message || message.source !== 'cc-helper' || message.type !== 'CC_HELPER_PROGRESS') return;
   const sourceId = String(message.sourceId || '');
-  if (!sourceId) return;
+  if (!sourceId.startsWith('instagram:')) return;
   const previous = progressBySource.get(sourceId) || {};
   const next = { ...previous, ...(message.progress || {}) };
   if (previous.passId && next.passId && previous.passId !== next.passId) {
