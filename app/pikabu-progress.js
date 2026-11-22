@@ -4,7 +4,7 @@ const bySource = new Map();
 const badge = document.createElement('span');
 badge.id = 'cc-pikabu-progress';
 badge.hidden = true;
-badge.style.cssText = 'display:inline-flex;align-items:center;padding:5px 8px;font:11px system-ui;border:1px solid #dedede;background:#fff;color:#444;';
+badge.style.cssText = 'display:none;align-items:center;padding:5px 8px;font:11px system-ui;border:1px solid #dedede;background:#fff;color:#444;';
 const header = document.querySelector('.header-actions');
 const refresh = document.querySelector('#refresh-button');
 if (refresh?.parentElement === header) refresh.before(badge);
@@ -20,6 +20,7 @@ function render() {
   const info = bySource.get(id);
   const visible = id.startsWith('pikabu:') && info && info.active;
   badge.hidden = !visible;
+  badge.style.display = visible ? 'inline-flex' : 'none';
   if (!visible) return;
   badge.textContent = 'Pikabu · найдено ' + (info.found || 0)
     + ' · сохранено ' + (info.saved || 0)
