@@ -118,7 +118,7 @@ function waitForTabComplete(tabId, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       chrome.tabs.onUpdated.removeListener(listener);
-      reject(new Error('Instagram page did not finish loading in time.'));
+      reject(new Error('Page did not finish loading in time.'));
     }, timeoutMs);
 
     const listener = (updatedId, changeInfo) => {
@@ -145,7 +145,7 @@ function sendTabMessage(tabId, message) {
     chrome.tabs.sendMessage(tabId, message, (response) => {
       const error = chrome.runtime.lastError;
       if (error) reject(new Error(error.message));
-      else if (!response?.ok) reject(new Error(response?.error || 'Instagram helper failed.'));
+      else if (!response?.ok) reject(new Error(response?.error || 'Browser helper failed.'));
       else resolve(response.result);
     });
   });
@@ -191,7 +191,7 @@ async function focusInstagramWorker(sourceId, timeoutMs = 8000) {
   throw new Error('Instagram worker tab is not ready or has already finished. Start Refresh / Load more and try Open worker again.');
 }
 
-async function createInstagramWorkerTab(targetUrl, caller) {
+async function createWorkerTab(targetUrl, caller) {
   const createProperties = {
     url: targetUrl,
     active: false,
@@ -202,7 +202,7 @@ async function createInstagramWorkerTab(targetUrl, caller) {
   if (caller?.tabId) createProperties.openerTabId = caller.tabId;
 
   const tab = await chrome.tabs.create(createProperties);
-  if (!tab.id) throw new Error('Could not open Instagram background tab.');
+  if (!tab.id) throw new Error('Could not open background tab.');
 
   await restoreCallerFocus(caller);
   await waitForTabComplete(tab.id);
@@ -252,7 +252,7 @@ async function collectInstagram(payload, caller) {
     maxSteps: 0,
   });
 
-  const tabId = await createInstagramWorkerTab(payload.url, caller);
+  const tabId = await createWorkerTab(payload.url, caller);
   workerSessions.set(tabId, {
     caller,
     sourceId: payload.sourceId || '',
@@ -311,6 +311,50 @@ async function collectInstagram(payload, caller) {
   }
 }
 
+async function collectPikabu(payload, caller) {
+  const target = new URL(payload?.url || '');
+  if (!['pikabu.ru', 'www.pikabu.ru'].includes(target.hostname)) {
+    throw new Error('Pikabu story URL is invalid.');
+  }
+  const match = target.pathname.match(/^\/story\/(?:[^/]*?_)?(\d+)(?:\/)?$/i);
+  if (!match || match[1] !== String(payload.storyId || '')) {
+    throw new Error('Pikabu story ID does not match the requested source.');
+  }
+
+  const sourceId = 'pikabu:' + match[1];
+  if (payload.sourceId !== sourceId) throw new Error('Pikabu source ID mismatch.');
+  const passId = sourceId + ':' + Date.now();
+  await sendProgress(caller, sourceId, {
+    passId, phase: 'opening', collected: 0, clicks: 0, step: 0,
+  });
+
+  const tabId = await createWorkerTab(target.toString(), caller);
+  workerSessions.set(tabId, {
+    caller, sourceId, passId, streamed: 0, lastCollected: 0,
+    manualFocus: false, closingByHelper: false,
+  });
+
+  try {
+    const request = {
+      type: 'CC_PIKABU_COLLECT',
+      sourceId, storyId: match[1], passId,
+      maxSteps: Math.min(2000, Math.max(20, Number(payload.maxSteps || 800))),
+    };
+    try {
+      return await sendTabMessage(tabId, request);
+    } catch (error) {
+      // Streamed comments are retained if page collection fails.
+      throw new Error('Pikabu collection failed: ' + (error?.message || error));
+    }
+  } finally {
+    const session = workerSessions.get(tabId);
+    if (session) session.closingByHelper = true;
+    try { await chrome.tabs.remove(tabId); } catch { /* User closed tab. */ }
+    if (!session?.manualFocus) await restoreCallerFocus(caller);
+    workerSessions.delete(tabId);
+  }
+}
+
 function safePathPart(value, fallback = 'post') {
   const cleaned = String(value || '')
     .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
@@ -347,7 +391,7 @@ function downloadUrl(url, filename) {
 async function downloadInstagramMedia(payload, caller) {
   if (!payload?.url) throw new Error('Instagram URL is missing.');
   const kind = payload.kind === 'video' ? 'video' : 'photos';
-  const tabId = await createInstagramWorkerTab(payload.url, caller);
+  const tabId = await createWorkerTab(payload.url, caller);
   await new Promise((resolve) => setTimeout(resolve, 1200));
   await restoreCallerFocus(caller);
 
@@ -412,6 +456,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === 'CC_PIKABU_PROGRESS') {
+    const tabId = sender.tab?.id || 0;
+    const session = workerSessions.get(tabId);
+    if (session) session.lastCollected = Math.max(session.lastCollected || 0, Number(message.progress?.collected || 0));
+    void forwardWorkerProgress(tabId, message.sourceId, message.progress || {});
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message?.type === 'CC_PIKABU_COMMENT_BATCH') {
+    void forwardWorkerBatch(sender.tab?.id || 0, message);
+    sendResponse({ ok: true });
+    return false;
+  }
+
   if (message?.type === 'CC_INSTAGRAM_PROGRESS') {
     const tabId = sender.tab?.id || 0;
     const session = workerSessions.get(tabId);
@@ -444,8 +503,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           'instagram-comment-stream',
           'instagram-manual-worker',
           'instagram-focus-worker',
+          'pikabu',
+          'pikabu-comment-stream',
         ],
       };
+    }
+    if (message.action === 'pikabu.collect') {
+      return await collectPikabu(message.payload || {}, callerFromSender(sender));
     }
     if (message.action === 'instagram.collect') {
       return await collectInstagram(message.payload || {}, callerFromSender(sender));
