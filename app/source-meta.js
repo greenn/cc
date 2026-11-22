@@ -13,6 +13,7 @@ function platformLabel(platform) {
   if (platform === 'youtube') return 'YouTube';
   if (platform === 'vk') return 'VK';
   if (platform === 'holywarsoo') return 'Holywarsoo';
+  if (platform === 'pikabu') return 'Pikabu';
   return platform || 'Source';
 }
 
