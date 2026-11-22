@@ -4,8 +4,9 @@ import { youtubeAdapter } from './platforms/youtube.js';
 import { instagramAdapter } from './platforms/instagram.js';
 import { vkAdapter } from './platforms/vk.js';
 import { holywarsooAdapter } from './platforms/holywarsoo.js';
+import { pikabuAdapter } from './platforms/pikabu.js';
 
-const adapters = [youtubeAdapter, instagramAdapter, vkAdapter, holywarsooAdapter];
+const adapters = [youtubeAdapter, instagramAdapter, vkAdapter, holywarsooAdapter, pikabuAdapter];
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
@@ -78,6 +79,7 @@ function sourceIcon(platform) {
   if (platform === 'instagram') return '◎';
   if (platform === 'vk') return 'VK';
   if (platform === 'holywarsoo') return '▤';
+  if (platform === 'pikabu') return 'P';
   return '•';
 }
 
@@ -414,7 +416,7 @@ function showStatus(message, kind = 'info') {
 
 async function addSource(url) {
   const adapter = adapterForUrl(url);
-  if (!adapter) throw new Error('This URL is not a supported YouTube, Instagram, VK, or forum link.');
+  if (!adapter) throw new Error('This URL is not a supported YouTube, Instagram, VK, Pikabu, or forum link.');
   const source = await adapter.getPost(url, store.getSettings());
   store.upsertSource(source);
   currentSourceId = source.id;
@@ -447,14 +449,17 @@ async function loadMoreComments(sourceId, { refresh = false } = {}) {
       hasMore: page.hasMore,
       loadedCount: store.getComments(source.id).length,
       lastUpdatedAt: new Date().toISOString(),
-      integrationStatus: 'ready',
+      integrationStatus: page.incomplete ? 'partial' : 'ready',
     };
+    if (source.platform === 'pikabu' && page.title) patch.title = page.title;
+    if (source.platform === 'pikabu' && page.author) patch.author = page.author;
     if (page.totalResults != null) patch.commentCount = page.totalResults;
     if (page.currentPage != null) patch.currentPage = page.currentPage;
     if (page.totalPages != null) patch.totalPages = page.totalPages;
     store.updateSource(source.id, patch);
     render();
-    if (refresh) showStatus('Source refreshed. Local read/saved/highlighted/deleted states were preserved.');
+    if (page.incomplete) showStatus('Pikabu collection was partial. Comments already collected were saved. Press Refresh to retry.', 'error');
+    else if (refresh) showStatus('Source refreshed. Local read/saved/highlighted/deleted states were preserved.');
   } catch (error) {
     showStatus(error.message || 'Could not load comments.', 'error');
   } finally {
@@ -530,7 +535,7 @@ $$('#top-tabs .top-tab').forEach((button) => button.addEventListener('click', ()
 
 ['#add-link-button', '#left-add-link', '#empty-add-link'].forEach((selector) => $(selector)?.addEventListener('click', openAddDialog));
 $('#settings-button').addEventListener('click', openSettings);
-$('#help-button').addEventListener('click', () => showStatus('YouTube uses YouTube Data API. VK uses video.getComments with your user token. Instagram uses CC Browser Helper with your signed-in browser session. Forums use per-site adapters. Passing the center line marks comments read. J/K navigate, S saves, H highlights, D deletes, O opens original.'));
+$('#help-button').addEventListener('click', () => showStatus('YouTube uses YouTube Data API. VK uses video.getComments with your user token. Instagram and Pikabu use CC Browser Helper with your browser session. Forums use per-site adapters. Passing the center line marks comments read. J/K navigate, S saves, H highlights, D deletes, O opens original.'));
 const exportDialog = $('#youtube-export-dialog');
 $('#youtube-export-close').addEventListener('click', () => exportDialog.close());
 $('#youtube-export-button').addEventListener('click', async (event) => {
