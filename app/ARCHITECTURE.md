@@ -110,3 +110,7 @@ This version is deliberately deployable as static GitHub Pages. It therefore use
 A desktop version can keep the same platform/domain concepts and replace `store.js` with an IPC-backed SQLite repository. The UI and adapter model do not need to be rewritten for that migration.
 
 For very large fully-loaded datasets, a later desktop build should add list virtualization (for example TanStack Virtual) rather than rendering every locally loaded comment.
+
+## Pikabu integration (0.7.2)
+
+`platforms/pikabu.js` recognizes Pikabu story links, preserving a stable `pikabu:<storyId>` source ID. `helper/chrome/pikabu-scraper.js` collects comments in a temporary tab using the user's normal browser session, progressively expands the supported comment-tree controls, and streams comment batches of up to 25. The CC store merges by Pikabu comment ID without resetting read/saved/notes state. This is a DOM-based adapter and must be verified against live Pikabu markup. It does not bypass login requirements or access controls.
