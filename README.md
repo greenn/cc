@@ -33,6 +33,21 @@ Comments are loaded by API pages of 50.
 
 Post/reel URLs are recognized, but comment loading still needs an authenticated official API or browser/local helper.
 
+### Pikabu
+
+Supported story URL:
+
+```text
+https://pikabu.ru/story/velikiy_kishlak_14543584#comments
+```
+
+Pikabu uses **CC Browser Helper** (Chrome/Chromium). The extension opens a temporary browser tab for the story, loads the page's visible comments and nested replies, and streams unique comments to the existing reader.
+
+- Reload the unpacked extension from `helper/chrome/` after updating the repository.
+- No Pikabu API key is needed.
+- Refresh rechecks the story, merges new accessible comments, and keeps read/saved/deleted/note state.
+- Partial collections are saved and flagged; inaccessible or deleted comments cannot be guaranteed.
+
 ### Holywarsoo forum
 
 Supported URL shape:
