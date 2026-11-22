@@ -47,11 +47,11 @@
     return '';
   }
 
-  function safePikabuUrl(value) {
+  function safePikabuUrl(value, asset = false) {
     try {
       const url = new URL(value, location.origin);
       if (!['http:', 'https:'].includes(url.protocol)) return '';
-      if (url.hostname !== 'pikabu.ru' && url.hostname !== 'www.pikabu.ru') return '';
+      if (asset ? !/(^|\.)pikabu\.ru$/i.test(url.hostname) : !['pikabu.ru', 'www.pikabu.ru'].includes(url.hostname)) return '';
       return url.toString();
     } catch {
       return '';
@@ -109,14 +109,15 @@
     const content = body.querySelector('.comment__content');
     const text = safeText(content);
     const images = [...(content?.querySelectorAll('img') || [])]
-      .map((img) => safePikabuUrl(img.currentSrc || img.getAttribute('src') || ''))
+      .map((img) => safePikabuUrl(img.currentSrc || img.getAttribute('src') || '', true))
       .filter(Boolean);
     const textWithMedia = [text, ...images.map((url) => '[Изображение] ' + url)].filter(Boolean).join('\n');
     if (!textWithMedia) return null;
 
-    const user = body.querySelector('.comment__user a[href], a.comment__user[href], .comment__user')
+    const userBase = body.querySelector('.comment__user');
+    const user = userBase?.querySelector('.user__nick, a[href*="/@"], a[href]') || userBase
       || body.querySelector('.comment__header a[href*="/@"]');
-    const authorName = safeText(user) || 'Аноним';
+    const authorName = userBase?.getAttribute('data-name') || safeText(user) || 'Аноним';
     const userLink = user?.closest('a[href]') || user?.querySelector?.('a[href]');
     const avatar = body.querySelector('.comment__avatar img, .comment__user-avatar img, img.comment__avatar');
     const parentNode = node.parentElement?.closest('.comment');
@@ -132,7 +133,7 @@
       parentCommentId: parentId || null,
       authorName,
       authorUsername: userLink?.pathname?.startsWith('/@') ? decodeURIComponent(userLink.pathname) : '',
-      authorAvatar: safePikabuUrl(avatar?.currentSrc || avatar?.getAttribute('src')),
+      authorAvatar: safePikabuUrl(avatar?.currentSrc || avatar?.getAttribute('src'), true),
       text: textWithMedia,
       publishedAt: normalizeDate(body.querySelector('time[datetime], .comment__date time, .comment__date, .comment__time')),
       likeCount: parseCount(body.querySelector('.comment__rating-count')?.textContent),
@@ -193,6 +194,7 @@
       const comment = node.closest('.comment');
       const children = comment?.querySelector(':scope > .comment__children');
       const collapsed = children?.hidden || children?.getAttribute('aria-hidden') === 'true'
+        || (children && getComputedStyle(children).display === 'none')
         || node.getAttribute('aria-expanded') === 'false';
       if (collapsed) add(node, 1);
     });
