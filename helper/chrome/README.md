@@ -50,3 +50,13 @@ No Instagram password is stored by CC or the extension.
 Instagram's web DOM is not a public API and can change. The collector intentionally avoids undocumented private API endpoints and only reads content that the current signed-in browser session can already display. If Instagram changes its markup or labels, `instagram-scraper.js` may need selector/text updates.
 
 The helper does not bypass private-account access, login requirements, or other access controls.
+
+## Pikabu flow
+
+1. Update the repository and reload the unpacked extension in `chrome://extensions/`. Accept the new Pikabu host permissions.
+2. Refresh the CC tab. In **Settings → Browser helper → Check helper**, confirm that `pikabu` is among the capabilities.
+3. Add `https://pikabu.ru/story/velikiy_kishlak_14543584#comments` in CC.
+4. The helper opens a temporary Pikabu tab, collects displayed comments, expands supported 'more' controls, and streams comments into CC.
+5. Each comment includes its stable ID, parent ID when available, author, rating, time when present, and original link.
+
+The collector reads only what the page displays. It does not bypass inaccessible comments or accounts. Since it uses Pikabu's DOM rather than an official API, markup changes can require selector updates.
