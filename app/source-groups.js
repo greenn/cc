@@ -3,7 +3,7 @@ import { store } from './store.js';
 const sourcesList = document.querySelector('#sources-list');
 const sectionLabel = document.querySelector('.sources-section > .section-label');
 const STORAGE_KEY = 'cc-collapsed-source-groups-v1';
-const COLLAPSIBLE_PLATFORMS = new Set(['youtube', 'instagram']);
+const COLLAPSIBLE_PLATFORMS = new Set(['youtube', 'instagram', 'pikabu']);
 
 function readCollapsedState() {
   try {
@@ -72,6 +72,7 @@ function platformForGroup(group) {
   const title = group.querySelector('.source-group-title')?.textContent?.trim().toLowerCase() || '';
   if (title.includes('youtube')) return 'youtube';
   if (title.includes('instagram')) return 'instagram';
+  if (title.includes('pikabu')) return 'pikabu';
   return '';
 }
 
