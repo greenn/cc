@@ -466,9 +466,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === 'CC_PIKABU_COMMENT_BATCH') {
-    void forwardWorkerBatch(sender.tab?.id || 0, message);
-    sendResponse({ ok: true });
-    return false;
+    // Confirm the batch only after it has reached the CC tab. This also keeps
+    // the final result from racing ahead of batches still being persisted.
+    forwardWorkerBatch(sender.tab?.id || 0, message).then(
+      () => sendResponse({ ok: true }),
+      (error) => sendResponse({ ok: false, error: error?.message || String(error) }),
+    );
+    return true;
   }
 
   if (message?.type === 'CC_INSTAGRAM_PROGRESS') {
