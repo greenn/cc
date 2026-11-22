@@ -20,7 +20,8 @@ function handleBatch(message) {
   const sourceId = String(message.sourceId || '');
   const passId = String(message.passId || `${sourceId}:stream`);
   const incoming = Array.isArray(message.comments) ? message.comments.filter(Boolean) : [];
-  if (!sourceId || !incoming.length || !store.getSource(sourceId)) return;
+  const source = store.getSource(sourceId);
+  if (!sourceId || !incoming.length || !source || !['instagram', 'pikabu'].includes(source.platform)) return;
 
   const pass = stateFor(passId);
   const unique = [];
@@ -41,11 +42,12 @@ function handleBatch(message) {
 
   store.updateSource(sourceId, {
     loadedCount: total,
-    commentCount: total,
-    instagramLastStreamedAt: new Date().toISOString(),
+    ...(source.platform === 'instagram'
+      ? { commentCount: total, instagramLastStreamedAt: new Date().toISOString() }
+      : { pikabuLastStreamedAt: new Date().toISOString() }),
   });
 
-  window.dispatchEvent(new CustomEvent('cc:instagram-stream-saved', {
+  window.dispatchEvent(new CustomEvent(source.platform === 'pikabu' ? 'cc:pikabu-stream-saved' : 'cc:instagram-stream-saved', {
     detail: {
       sourceId,
       passId,
